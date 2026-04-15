@@ -14,7 +14,7 @@ double ShortestPathResult::distance(quint32 destination) const
     if (!m_valid) {
         return std::numeric_limits<double>::infinity();
     }
-    auto it = m_distances.find(destination);
+    QMap<quint32, double>::const_iterator it = m_distances.find(destination);
     if (it == m_distances.end()) {
         return std::numeric_limits<double>::infinity();
     }
@@ -28,7 +28,7 @@ QVector<quint32> ShortestPathResult::path(quint32 destination) const
     }
 
     // 目标节点不可达
-    auto distIt = m_distances.find(destination);
+    QMap<quint32, double>::const_iterator distIt = m_distances.find(destination);
     if (distIt == m_distances.end() ||
         distIt.value() == std::numeric_limits<double>::infinity()) {
         return {};
@@ -42,7 +42,7 @@ QVector<quint32> ShortestPathResult::path(quint32 destination) const
         if (current == m_source) {
             break;
         }
-        auto hasIt = m_hasPredecessor.find(current);
+        QMap<quint32, bool>::const_iterator hasIt = m_hasPredecessor.find(current);
         if (hasIt == m_hasPredecessor.end() || !hasIt.value()) {
             // 没有前驱但也不是起点，说明路径断裂
             return {};

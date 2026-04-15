@@ -97,7 +97,7 @@ QPair<bool, QVector<Edge>> readGraph(const QString& filePath, QString* errorMsg)
             return qMakePair(false, links);
         }
                 
-        auto bandwidthOpt = parseBandwidth(fields[2]);
+        std::optional<double> bandwidthOpt = parseBandwidth(fields[2]);
         if (!bandwidthOpt.has_value()) {
             if (errorMsg) {
                 *errorMsg = QString("无法解析带宽: %1").arg(fields[2]);
@@ -105,7 +105,7 @@ QPair<bool, QVector<Edge>> readGraph(const QString& filePath, QString* errorMsg)
             return qMakePair(false, links);
         }
                 
-        auto delayOpt = parseDelay(fields[3]);
+        std::optional<double> delayOpt = parseDelay(fields[3]);
         if (!delayOpt.has_value()) {
             if (errorMsg) {
                 *errorMsg = QString("无法解析延迟: %1").arg(fields[3]);

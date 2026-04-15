@@ -9,7 +9,7 @@ double FloydWarshallResult::distance(quint32 source, quint32 target) const
     if (!m_valid) {
         return std::numeric_limits<double>::infinity();
     }
-    auto it = m_distances.find(qMakePair(source, target));
+    QMap<QPair<quint32, quint32>, double>::const_iterator it = m_distances.find(qMakePair(source, target));
     if (it == m_distances.end()) {
         return std::numeric_limits<double>::infinity();
     }
@@ -23,7 +23,7 @@ QVector<quint32> FloydWarshallResult::path(quint32 source, quint32 target) const
     }
 
     // 检查路径是否存在
-    auto distIt = m_distances.find(qMakePair(source, target));
+    QMap<QPair<quint32, quint32>, double>::const_iterator distIt = m_distances.find(qMakePair(source, target));
     if (distIt == m_distances.end() ||
         distIt.value() == std::numeric_limits<double>::infinity()) {
         return {};
@@ -40,7 +40,7 @@ QVector<quint32> FloydWarshallResult::path(quint32 source, quint32 target) const
     result.append(current);
 
     while (current != target) {
-        auto nextIt = m_nextHop.find(qMakePair(current, target));
+        QMap<QPair<quint32, quint32>, quint32>::const_iterator nextIt = m_nextHop.find(qMakePair(current, target));
         if (nextIt == m_nextHop.end()) {
             // 路径断裂
             return {};
@@ -63,7 +63,7 @@ QVector<std::tuple<quint32, quint32, double>> FloydWarshallResult::allDistances(
     if (!m_valid) {
         return result;
     }
-    for (auto it = m_distances.cbegin(); it != m_distances.cend(); ++it) {
+    for (QMap<QPair<quint32, quint32>, double>::const_iterator it = m_distances.cbegin(); it != m_distances.cend(); ++it) {
         result.append(std::make_tuple(it.key().first, it.key().second, it.value()));
     }
     return result;

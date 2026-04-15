@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QDebug>
+#include <QtMath>
 #include <cmath>
 #include <limits>
 #include <algorithm>
@@ -58,7 +59,7 @@ networkDeploymentDelay(const QString& csvFile, QString* errorMsg) {
         for (quint32 target : nodeList) {
             if (source != target) {
                 double delay = result.distance(target);
-                if (!std::isinf(delay)) {
+                if (!qIsInf(delay)) {
                     results.append(std::make_tuple(source, target, delay));
                 }
             }
@@ -208,7 +209,7 @@ std::optional<KCenterResult> kCenterAlgorithm(
         double totalDelay = 0.0;
         for (const auto& [node, dist] : associatedNodes) {
             Q_UNUSED(node);
-            maxDelayK = std::max(maxDelayK, dist);
+            maxDelayK = qMax(maxDelayK, dist);
             totalDelay += dist;
         }
         double aveDelayK = totalDelay / nodeCount;
@@ -254,7 +255,7 @@ std::optional<std::tuple<quint32, double, double>> findControlNode(
     quint32 controlNode = 0;
     QVector<double> controlNodeDelays;
     
-    for (auto it = nodeDelays.constBegin(); it != nodeDelays.constEnd(); ++it) {
+    for (QMap<quint32, QVector<double>>::const_iterator it = nodeDelays.constBegin(); it != nodeDelays.constEnd(); ++it) {
         quint32 node = it.key();
         const QVector<double>& delaysList = it.value();
         
@@ -279,7 +280,7 @@ std::optional<std::tuple<quint32, double, double>> findControlNode(
     double maxDistance = 0.0;
     double totalDistance = 0.0;
     for (double d : controlNodeDelays) {
-        maxDistance = std::max(maxDistance, d);
+        maxDistance = qMax(maxDistance, d);
         totalDistance += d;
     }
     double avgDistance = totalDistance / controlNodeDelays.size();
@@ -397,16 +398,15 @@ void networkDeploymentFile(const QString& csvFile) {
     
     if (success) {
         // 按 source 和 target 排序
-        std::sort(delays.begin(), delays.end(), 
-            [](const auto& a, const auto& b) {
-                if (std::get<0>(a) != std::get<0>(b)) {
-                    return std::get<0>(a) < std::get<0>(b);
-                }
-                return std::get<1>(a) < std::get<1>(b);
-            });
+        std::sort(delays.begin(), delays.end(), [](const auto& a, const auto& b) {
+            if (std::get<0>(a) != std::get<0>(b)) {
+                return std::get<0>(a) < std::get<0>(b);
+            }
+            return std::get<1>(a) < std::get<1>(b);
+        });
         
         // 找到控制节点（与其他节点平均delay最小的节点）
-        auto controlNodeResult = findControlNode(delays);
+        std::optional<std::tuple<quint32, double, double>> controlNodeResult = findControlNode(delays);
         quint32 controlNode = 0;
         double controlMaxDistance = 0.0;
         double controlAvgDistance = 0.0;
@@ -436,11 +436,11 @@ void networkDeploymentFile(const QString& csvFile) {
         int nodeCount = nodesSet.size();
         
         // 第一次运行 K-中心算法: k = 节点数 * 0.01
-        int k1 = static_cast<int>(std::ceil(nodeCount * 0.01));
+        int k1 = static_cast<int>(qCeil(nodeCount * 0.01));
         std::optional<std::pair<double, double>> ratioK1;
         
         if (k1 > 0) {
-            auto result1 = kCenterAlgorithm(delays, k1);
+            std::optional<KCenterResult> result1 = kCenterAlgorithm(delays, k1);
             if (result1.has_value()) {
                 printKCenterResult(logStream, result1.value(), 1, k1, "1%");
                 printDelayRatio(logStream, result1.value().maxDelay, result1.value().aveDelay,
@@ -456,11 +456,11 @@ void networkDeploymentFile(const QString& csvFile) {
         }
         
         // 第二次运行 K-中心算法: k = 节点数 * 0.02
-        int k2 = static_cast<int>(std::ceil(nodeCount * 0.02));
+        int k2 = static_cast<int>(qCeil(nodeCount * 0.02));
         std::optional<std::pair<double, double>> ratioK2;
         
         if (k2 > 0 && k2 != k1) {
-            auto result2 = kCenterAlgorithm(delays, k2);
+            std::optional<KCenterResult> result2 = kCenterAlgorithm(delays, k2);
             if (result2.has_value()) {
                 printKCenterResult(logStream, result2.value(), 2, k2, "2%");
                 printDelayRatio(logStream, result2.value().maxDelay, result2.value().aveDelay,
@@ -516,10 +516,10 @@ void networkDeploymentFile(const QString& csvFile) {
 void networkDeployment() {
     // 定义要处理的文件列表
     QStringList csvFiles = {
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-1000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-2000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-3000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-4000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {

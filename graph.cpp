@@ -37,7 +37,7 @@ bool Graph::fromEdges(const QVector<Edge> &edges, Graph &outGraph, QString *erro
 
 const QVector<std::tuple<quint32, double, double>> *Graph::neighbors(quint32 node) const
 {
-    auto it = m_adjacencyList.find(node);
+    QMap<quint32, QVector<std::tuple<quint32, double, double>>>::const_iterator it = m_adjacencyList.find(node);
     if (it == m_adjacencyList.end()) {
         return nullptr;
     }

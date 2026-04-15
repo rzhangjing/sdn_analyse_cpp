@@ -1,6 +1,7 @@
 #include "network_bandwidth_allocation.h"
 #include <QRandomGenerator>
 #include <QDebug>
+#include <QtMath>
 #include <algorithm>
 #include <cmath>
 
@@ -25,7 +26,7 @@ static void initializeArrayA(QVector<double>& arrayA, double q) {
         // -q 到 q 之间的随机数
         double randomStep = rng->generateDouble() * 2.0 * q - q;
         // max{0, 随机数}
-        double step = std::max(0.0, randomStep);
+        double step = qMax(0.0, randomStep);
         arrayA[i] = arrayA[i - 1] + step;
     }
 }
@@ -42,7 +43,7 @@ static double calculateSuccessRate(const QVector<double>& array, const QVector<d
     }
     // s/901 保留两位小数
     double rate = static_cast<double>(s) / EXPERIMENT_COUNT;
-    return std::round(rate * 100.0) / 100.0;
+    return static_cast<double>(qRound(rate * 100.0)) / 100.0;
 }
 
 /// 处理数组B并计算成功率
@@ -56,7 +57,7 @@ static double processArrayB(QVector<double>& arrayB, const QVector<double>& arra
     QVector<double> arrayBPrime = arrayB;
     
     // 阶段2: j从c到c+10，B[j] = B[j] + 5
-    int endJ1 = std::min(c + 10, ARRAY_SIZE);
+    int endJ1 = qMin(c + 10, ARRAY_SIZE);
     for (int j = c; j < endJ1; ++j) {
         arrayB[j] += 5.0;
     }
@@ -69,7 +70,7 @@ static double processArrayB(QVector<double>& arrayB, const QVector<double>& arra
         double maxGrowth = 0.0;
         for (int k = j - 10; k < j; ++k) {
             if (k > 0 && k < ARRAY_SIZE) {
-                double growth = std::abs(arrayBPrime[k] - arrayBPrime[k - 1]);
+                double growth = qAbs(arrayBPrime[k] - arrayBPrime[k - 1]);
                 if (growth > maxGrowth) {
                     maxGrowth = growth;
                 }
@@ -112,17 +113,17 @@ std::tuple<double, double, double> calculateStatistics(const QVector<double>& ra
     double totalRate = 0.0;
     
     for (double rate : rates) {
-        maxRate = std::max(maxRate, rate);
-        minRate = std::min(minRate, rate);
+        maxRate = qMax(maxRate, rate);
+        minRate = qMin(minRate, rate);
         totalRate += rate;
     }
     
     double avgRate = totalRate / rates.size();
     
     // 保留两位小数
-    double maxRounded = std::round(maxRate * 100.0) / 100.0;
-    double avgRounded = std::round(avgRate * 100.0) / 100.0;
-    double minRounded = std::round(minRate * 100.0) / 100.0;
+    double maxRounded = static_cast<double>(qRound(maxRate * 100.0)) / 100.0;
+    double avgRounded = static_cast<double>(qRound(avgRate * 100.0)) / 100.0;
+    double minRounded = static_cast<double>(qRound(minRate * 100.0)) / 100.0;
     
     return std::make_tuple(maxRounded, avgRounded, minRounded);
 }

@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QRandomGenerator>
 #include <QDebug>
+#include <QtMath>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -44,8 +45,8 @@ static QMap<QPair<quint32, quint32>, quint32> buildHopMatrix(const QVector<Netwo
     // 转换为跳数矩阵
     auto allDist = fw.allDistances();
     for (const auto& [src, tgt, dist] : allDist) {
-        if (std::isfinite(dist) && dist > 0.0) {
-            result.insert(qMakePair(src, tgt), static_cast<quint32>(std::round(dist)));
+        if (qIsFinite(dist) && dist > 0.0) {
+            result.insert(qMakePair(src, tgt), static_cast<quint32>(qRound(dist)));
         }
     }
     
@@ -118,14 +119,14 @@ static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
     }
     std::sort(v.begin(), v.end());
     
-    int pick = std::min(num, static_cast<int>(v.size()));
+    int pick = qMin(num, static_cast<int>(v.size()));
     QVector<quint32> shuffled = v;
     
     // Fisher-Yates shuffle
     QRandomGenerator* rng = QRandomGenerator::global();
     for (int i = shuffled.size() - 1; i > 0; --i) {
         int j = rng->bounded(0, i + 1);
-        std::swap(shuffled[i], shuffled[j]);
+        qSwap(shuffled[i], shuffled[j]);
     }
     
     QVector<quint32> vc;
@@ -158,13 +159,13 @@ static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, i
 static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
                              const FloydWarshallResult& delayFw) {
     double dCiCj = delayFw.distance(ci, cj);
-    if (std::isinf(dCiCj)) return false;
+    if (qIsInf(dCiCj)) return false;
     
     double dCiSte = delayFw.distance(ci, e.source);
     double dEneCj = delayFw.distance(e.target, cj);
-    if (std::isinf(dCiSte) || std::isinf(dEneCj)) return false;
+    if (qIsInf(dCiSte) || qIsInf(dEneCj)) return false;
     
-    return std::abs(dCiSte + e.weight + dEneCj - dCiCj) < 1e-9;
+    return qAbs(dCiSte + e.weight + dEneCj - dCiCj) < 1e-9;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,8 +211,8 @@ static double computeYG(const NetworkEdge& e, quint32 ci, quint32 cj,
     // IGp_e_ci_cj：lG_ci_cj == E_abs（即 h > alpha_max）
     quint32 hCiCj = hopMap.value(qMakePair(ci, cj), std::numeric_limits<quint32>::max());
     double lVal = lValue(hCiCj, alphaMin, alphaMax, beta, eAbs);
-    if (std::abs(lVal - static_cast<double>(eAbs)) < 1e-9) {
-        return maxw * std::pow(static_cast<double>(eAbs), 2);
+    if (qAbs(lVal - static_cast<double>(eAbs)) < 1e-9) {
+        return maxw * qPow(static_cast<double>(eAbs), 2);
     }
     
     // 否则：dGh / dGv
@@ -219,7 +220,7 @@ static double computeYG(const NetworkEdge& e, quint32 ci, quint32 cj,
     double dgV = static_cast<double>(hopMap.value(qMakePair(e.source, mcn), 0));
     double hCiMcn = static_cast<double>(hopMap.value(qMakePair(ci, mcn), std::numeric_limits<quint32>::max()));
     double hCjMcn = static_cast<double>(hopMap.value(qMakePair(cj, mcn), std::numeric_limits<quint32>::max()));
-    double dgH = std::min(hCiMcn, hCjMcn);
+    double dgH = qMin(hCiMcn, hCjMcn);
     
     if (dgV == 0.0) {
         return mina;
@@ -273,7 +274,7 @@ static QVector<NetworkEdge> step4BuildInitialGc(const QVector<NetworkEdge>& edge
                                                  const QVector<quint32>& vc) {
     // 构建以 Wep 为权重的图
     Graph g = buildGraph(edges, [](const NetworkEdge& e) { 
-        return std::max(e.weightedCost, 0.0); 
+        return qMax(e.weightedCost, 0.0); 
     });
     
     FloydWarshallResult wepFw;
@@ -329,7 +330,7 @@ static int countViolations(const QMap<QPair<quint32, quint32>, quint32>& gcHopMa
             quint32 hGc = gcHopMap.value(qMakePair(ci, cj), std::numeric_limits<quint32>::max());
             
             double limit = lValue(hG, alphaMin, alphaMax, beta, eAbs);
-            quint32 threshold = static_cast<quint32>(std::round(limit * static_cast<double>(hG)));
+            quint32 threshold = static_cast<quint32>(qRound(limit * static_cast<double>(hG)));
             
             if (hGc > threshold) {
                 ++violations;
@@ -462,14 +463,14 @@ std::optional<EecnBuild> eecnGraphBuild(
     // 步骤 2b：计算 maxw
     ctx.maxw = 0.0;
     for (const NetworkEdge& e : ctx.eSet) {
-        ctx.maxw = std::max(ctx.maxw, e.weight);
+        ctx.maxw = qMax(ctx.maxw, e.weight);
     }
     
     // 步骤 2c：计算 G 上所有节点对的最短跳数矩阵
     ctx.gHopMap = buildHopMatrix(ctx.eSet);
     
     // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep
-    auto delayFwOpt = buildDelayFw(ctx.eSet);
+    std::optional<FloydWarshallResult> delayFwOpt = buildDelayFw(ctx.eSet);
     if (!delayFwOpt.has_value()) {
         qDebug() << "构建延迟矩阵失败：图为空";
         return std::nullopt;
@@ -541,7 +542,7 @@ static void networkAllocationFile(const QString& csvFile) {
     teeWriteln(logStream, QString("edge_server_num=%1, alpha_min=%2, alpha_max=%3, beta=%4")
         .arg(edgeServerNum).arg(alphaMin).arg(alphaMax).arg(beta));
     
-    auto ctxOpt = eecnGraphBuild(csvFile, edgeServerNum, alphaMin, alphaMax, beta);
+    std::optional<EecnBuild> ctxOpt = eecnGraphBuild(csvFile, edgeServerNum, alphaMin, alphaMax, beta);
     
     if (ctxOpt.has_value()) {
         const EecnBuild& ctx = ctxOpt.value();
