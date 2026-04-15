@@ -76,27 +76,28 @@ networkDeploymentDelay(const QString& csvFile, QString* errorMsg) {
 std::optional<KCenterResult> kCenterAlgorithm(
     const QVector<std::tuple<quint32, quint32, double>>& delays, 
     int k) {
-    
+
     if (k <= 0 || delays.isEmpty()) {
         return std::nullopt;
     }
-    
+
     // 构建距离矩阵和节点集合
     QMap<QPair<quint32, quint32>, double> distanceMap;
     QSet<quint32> nodeSet;
-    
+
     for (const auto& [source, target, delay] : delays) {
         distanceMap.insert(qMakePair(source, target), delay);
         nodeSet.insert(source);
         nodeSet.insert(target);
     }
-    
+
     QVector<quint32> nodeList;
+    nodeList.reserve(nodeSet.size());
     for (quint32 node : nodeSet) {
         nodeList.append(node);
     }
     int n = nodeList.size();
-    
+
     if (k >= n) {
         // 如果k大于等于节点数，所有节点都是中心
         KCenterResult result;
@@ -106,7 +107,7 @@ std::optional<KCenterResult> kCenterAlgorithm(
         }
         return result;
     }
-    
+
     // 辅助函数：获取两个节点之间的距离
     auto getDistance = [&distanceMap](quint32 a, quint32 b) -> double {
         if (a == b) {
@@ -114,12 +115,29 @@ std::optional<KCenterResult> kCenterAlgorithm(
         }
         return distanceMap.value(qMakePair(a, b), std::numeric_limits<double>::infinity());
     };
-    
-    // 贪心算法选择k个中心
-    // 1. 选择第一个中心（选择与其他节点平均距离最小的节点）
+
+    // 使用标准的贪心 2-近似 k-center 算法 (Gonzalez 1985)
+    // 优化：维护每个节点到最近中心的距离数组，避免每轮重复计算
+
+    // 节点索引映射：node -> index in nodeList
+    QMap<quint32, int> nodeToIndex;
+    for (int i = 0; i < n; ++i) {
+        nodeToIndex[nodeList[i]] = i;
+    }
+
+    // minDistances[i] = 节点 nodeList[i] 到最近中心的距离
+    QVector<double> minDistances(n, std::numeric_limits<double>::infinity());
+    // nearestCenter[i] = 节点 nodeList[i] 的最近中心节点
+    QVector<quint32> nearestCenter(n, 0);
+
+    QVector<quint32> centers;
+    centers.reserve(k);
+    QSet<quint32> centerSet;
+
+    // 1. 选择第一个中心：选择与其他节点平均距离最小的节点
     quint32 bestFirstCenter = nodeList[0];
     double minAvgDist = std::numeric_limits<double>::infinity();
-    
+
     for (quint32 candidate : nodeList) {
         double totalDist = 0.0;
         for (quint32 node : nodeList) {
@@ -131,84 +149,85 @@ std::optional<KCenterResult> kCenterAlgorithm(
             bestFirstCenter = candidate;
         }
     }
-    
-    QVector<quint32> centers;
+
     centers.append(bestFirstCenter);
-    QSet<quint32> centerSet;
     centerSet.insert(bestFirstCenter);
-    
-    // 2. 迭代选择剩余的k-1个中心
+
+    // 初始化所有节点到第一个中心的距离
+    for (int i = 0; i < n; ++i) {
+        minDistances[i] = getDistance(nodeList[i], bestFirstCenter);
+        nearestCenter[i] = bestFirstCenter;
+    }
+
+    // 2. 迭代选择剩余的 k-1 个中心
+    // 每轮选择距离当前中心集合最远的节点作为新中心
     while (centers.size() < k) {
+        // 找到距离当前中心集合最远的节点
         double maxMinDistance = -1.0;
-        quint32 nextCenter = nodeList[0];
-        
-        // 对于每个非中心节点，计算它到最近中心的距离
-        for (quint32 node : nodeList) {
+        int farthestIndex = -1;
+
+        for (int i = 0; i < n; ++i) {
+            quint32 node = nodeList[i];
             if (centerSet.contains(node)) {
                 continue;
             }
-            
-            // 计算该节点到所有中心的最小距离
-            double minDistToCenter = std::numeric_limits<double>::infinity();
-            for (quint32 center : centers) {
-                double dist = getDistance(node, center);
-                if (dist < minDistToCenter) {
-                    minDistToCenter = dist;
-                }
-            }
-            
-            // 选择距离当前中心集合最远的节点作为下一个中心
-            if (minDistToCenter > maxMinDistance) {
-                maxMinDistance = minDistToCenter;
-                nextCenter = node;
+            if (minDistances[i] > maxMinDistance) {
+                maxMinDistance = minDistances[i];
+                farthestIndex = i;
             }
         }
-        
+
+        if (farthestIndex == -1) {
+            break; // 所有节点都已成为中心
+        }
+
+        quint32 nextCenter = nodeList[farthestIndex];
         centers.append(nextCenter);
         centerSet.insert(nextCenter);
+
+        // 更新所有非中心节点到新中心的距离
+        for (int i = 0; i < n; ++i) {
+            quint32 node = nodeList[i];
+            if (centerSet.contains(node)) {
+                continue;
+            }
+            double distToNewCenter = getDistance(node, nextCenter);
+            if (distToNewCenter < minDistances[i]) {
+                minDistances[i] = distToNewCenter;
+                nearestCenter[i] = nextCenter;
+            }
+        }
     }
-    
-    // 3. 将每个非中心节点关联到延迟最小的中心节点
+
+    // 3. 构建节点分配结果
     QVector<std::tuple<quint32, quint32, double>> nodeAssignments;
     QMap<quint32, QVector<QPair<quint32, double>>> centerToNodes;
-    
-    for (quint32 node : nodeList) {
+
+    for (int i = 0; i < n; ++i) {
+        quint32 node = nodeList[i];
         if (centerSet.contains(node)) {
             continue; // 跳过中心节点本身
         }
-        
-        // 找到距离该节点最近的中心
-        double minDist = std::numeric_limits<double>::infinity();
-        quint32 nearestCenter = centers[0];
-        
-        for (quint32 center : centers) {
-            double dist = getDistance(node, center);
-            if (dist < minDist) {
-                minDist = dist;
-                nearestCenter = center;
-            }
-        }
-        
-        nodeAssignments.append(std::make_tuple(node, nearestCenter, minDist));
-        centerToNodes[nearestCenter].append(qMakePair(node, minDist));
+        double minDist = minDistances[i];
+        quint32 assignedCenter = nearestCenter[i];
+        nodeAssignments.append(std::make_tuple(node, assignedCenter, minDist));
+        centerToNodes[assignedCenter].append(qMakePair(node, minDist));
     }
-    
+
     // 4. 计算每个中心节点的统计信息
     QVector<std::tuple<quint32, int, double, double>> centerStats;
     double globalMaxDelay = 0.0;
     double totalAveDelay = 0.0;
-    
+
     for (quint32 center : centers) {
         QVector<QPair<quint32, double>> associatedNodes = centerToNodes.value(center);
         int nodeCount = associatedNodes.size();
-        
+
         if (nodeCount == 0) {
-            // 该中心没有关联的节点
             centerStats.append(std::make_tuple(center, 0, 0.0, 0.0));
             continue;
         }
-        
-        // 计算该中心的max_delay_k和ave_delay_k
+
         double maxDelayK = 0.0;
         double totalDelay = 0.0;
         for (const auto& [node, dist] : associatedNodes) {
@@ -217,25 +236,24 @@ std::optional<KCenterResult> kCenterAlgorithm(
             totalDelay += dist;
         }
         double aveDelayK = totalDelay / nodeCount;
-        
+
         centerStats.append(std::make_tuple(center, nodeCount, maxDelayK, aveDelayK));
-        
-        // 更新全局统计
+
         if (maxDelayK > globalMaxDelay) {
             globalMaxDelay = maxDelayK;
         }
         totalAveDelay += aveDelayK;
     }
-    
+
     double aveDelay = totalAveDelay / k;
-    
+
     KCenterResult result;
     result.centers = centers;
     result.nodeAssignments = nodeAssignments;
     result.centerStats = centerStats;
     result.maxDelay = globalMaxDelay;
     result.aveDelay = aveDelay;
-    
+
     return result;
 }
 
@@ -401,7 +419,7 @@ void networkDeploymentFile(const QString& csvFile) {
     auto [success, graphResult] = networkDeploymentDelay(csvFile, &errorMsg);
 
     // 输出最短路径计算结果
-    if (success) {
+    /*if (success) {
         teeWriteln(logStream, QString("\n---------- 最短路径计算结果 ----------"));
         teeWriteln(logStream, QString("共计算出 %1 对节点间的最短路径").arg(graphResult.pathMap.size()));
         for (auto it = graphResult.pathMap.constBegin(); it != graphResult.pathMap.constEnd(); ++it) {
@@ -410,7 +428,7 @@ void networkDeploymentFile(const QString& csvFile) {
                 .arg(nodePath.source).arg(nodePath.target).arg(nodePath.distance, 0, 'f', 3));
         }
         teeWriteln(logStream, QString("--------------------------------------\n"));
-    }
+    }*/
 
     if (success) {
         // 从 pathMap 构造 delays 向量用于后续算法
