@@ -20,9 +20,9 @@ void teeWriteln(QTextStream& logStream, const QString& msg) {
     logStream << msg << Qt::endl;
 }
 
-QPair<bool, QVector<std::tuple<quint32, quint32, double>>> 
+QPair<bool, GraphShortestPath> 
 networkDeploymentDelay(const QString& csvFile, QString* errorMsg) {
-    QVector<std::tuple<quint32, quint32, double>> results;
+    GraphShortestPath graphResult;
     
     // 读取边数据
     QString readError;
@@ -31,42 +31,46 @@ networkDeploymentDelay(const QString& csvFile, QString* errorMsg) {
         if (errorMsg) {
             *errorMsg = QString("读取图数据失败: %1").arg(readError);
         }
-        return qMakePair(false, results);
+        return qMakePair(false, graphResult);
     }
     
     // 构建图
-    Graph graph;
-    if (!Graph::fromEdges(edges, graph, errorMsg)) {
-        return qMakePair(false, results);
+    if (!Graph::fromEdges(edges, graphResult.graph, errorMsg)) {
+        return qMakePair(false, graphResult);
     }
     
     // 获取图中所有节点
-    QList<quint32> nodeList = graph.nodes();
+    QList<quint32> nodeList = graphResult.graph.nodes();
     
     // 计算每对节点之间的最小延时
     for (quint32 source : nodeList) {
         // 执行 Dijkstra 算法
         ShortestPathResult result;
         QString dijkstraError;
-        if (!dijkstra(graph, source, result, &dijkstraError)) {
+        if (!dijkstra(graphResult.graph, source, result, &dijkstraError)) {
             if (errorMsg) {
                 *errorMsg = QString("Dijkstra 算法失败: %1").arg(dijkstraError);
             }
             continue;
         }
         
-        // 获取到所有其他节点的最短距离（延时）
+        // 获取到所有其他节点的最短距离（延时）和路径
         for (quint32 target : nodeList) {
             if (source != target) {
                 double delay = result.distance(target);
                 if (!qIsInf(delay)) {
-                    results.append(std::make_tuple(source, target, delay));
+                    NodeShortestPath nodePath;
+                    nodePath.source = source;
+                    nodePath.target = target;
+                    nodePath.distance = delay;
+                    nodePath.path = result.path(target);
+                    graphResult.pathMap.insert(qMakePair(source, target), nodePath);
                 }
             }
         }
     }
     
-    return qMakePair(true, results);
+    return qMakePair(true, graphResult);
 }
 
 std::optional<KCenterResult> kCenterAlgorithm(
@@ -394,20 +398,28 @@ void networkDeploymentFile(const QString& csvFile) {
     teeWriteln(logStream, QString("\n========== 处理文件: %1 ==========").arg(csvFile));
     
     QString errorMsg;
-    auto [success, delays] = networkDeploymentDelay(csvFile, &errorMsg);
+    auto [success, graphResult] = networkDeploymentDelay(csvFile, &errorMsg);
 
     // 输出最短路径计算结果
     if (success) {
         teeWriteln(logStream, QString("\n---------- 最短路径计算结果 ----------"));
-        teeWriteln(logStream, QString("共计算出 %1 对节点间的最短路径").arg(delays.size()));
-        for (const auto& [source, target, delay] : delays) {
+        teeWriteln(logStream, QString("共计算出 %1 对节点间的最短路径").arg(graphResult.pathMap.size()));
+        for (auto it = graphResult.pathMap.constBegin(); it != graphResult.pathMap.constEnd(); ++it) {
+            const NodeShortestPath& nodePath = it.value();
             teeWriteln(logStream, QString("  节点 %1 -> 节点 %2 : 延迟 %3 ms")
-                .arg(source).arg(target).arg(delay, 0, 'f', 3));
+                .arg(nodePath.source).arg(nodePath.target).arg(nodePath.distance, 0, 'f', 3));
         }
         teeWriteln(logStream, QString("--------------------------------------\n"));
     }
 
     if (success) {
+        // 从 pathMap 构造 delays 向量用于后续算法
+        QVector<std::tuple<quint32, quint32, double>> delays;
+        for (auto it = graphResult.pathMap.constBegin(); it != graphResult.pathMap.constEnd(); ++it) {
+            const NodeShortestPath& nodePath = it.value();
+            delays.append(std::make_tuple(nodePath.source, nodePath.target, nodePath.distance));
+        }
+        
         // 按 source 和 target 排序
         std::sort(delays.begin(), delays.end(), [](const auto& a, const auto& b) {
             if (std::get<0>(a) != std::get<0>(b)) {
@@ -528,9 +540,9 @@ void networkDeployment() {
     // 定义要处理的文件列表
     QStringList csvFiles = {
         "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {

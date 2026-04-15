@@ -9,6 +9,8 @@
 #include <optional>
 #include <tuple>
 
+#include "dijkstra.h"
+
 /// K-中心算法结果
 struct KCenterResult {
     /// 选中的k个中心节点
@@ -28,10 +30,10 @@ struct KCenterResult {
 namespace network_deployment {
 
 /// 计算所有节点对的最短延迟
-/// 返回: QPair<bool, QVector<std::tuple<quint32, quint32, double>>>
+/// 返回: QPair<bool, GraphShortestPath>
 ///   - first: true 表示成功
-///   - second: (source, target, delay) 列表
-QPair<bool, QVector<std::tuple<quint32, quint32, double>>> 
+///   - second: GraphShortestPath 包含图数据和所有节点对的最短路径信息
+QPair<bool, GraphShortestPath> 
 networkDeploymentDelay(const QString& csvFile, QString* errorMsg = nullptr);
 
 /// K-中心算法

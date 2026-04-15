@@ -3,7 +3,6 @@
 #include <QMap>
 #include <QVector>
 #include <QString>
-#include <QMap>
 #include <limits>
 #include "graph.h"
 
