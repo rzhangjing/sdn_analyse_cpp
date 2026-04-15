@@ -27,30 +27,12 @@ QVector<quint32> ShortestPathResult::path(quint32 destination) const
         return {};
     }
 
-    // 目标节点不可达
-    QMap<quint32, double>::const_iterator distIt = m_distances.find(destination);
-    if (distIt == m_distances.end() ||
-        distIt.value() == std::numeric_limits<double>::infinity()) {
+    // 直接从 m_paths 中查找路径
+    QMap<quint32, QVector<quint32>>::const_iterator it = m_paths.find(destination);
+    if (it == m_paths.end()) {
         return {};
     }
-
-    QVector<quint32> result;
-    quint32 current = destination;
-
-    while (true) {
-        result.prepend(current);
-        if (current == m_source) {
-            break;
-        }
-        QMap<quint32, bool>::const_iterator hasIt = m_hasPredecessor.find(current);
-        if (hasIt == m_hasPredecessor.end() || !hasIt.value()) {
-            // 没有前驱但也不是起点，说明路径断裂
-            return {};
-        }
-        current = m_predecessors.value(current);
-    }
-
-    return result;
+    return it.value();
 }
 
 // -------------------- dijkstra 算法实现 --------------------
@@ -68,6 +50,20 @@ bool dijkstra(const Graph &graph, quint32 source,
     }
 
     const double INF = std::numeric_limits<double>::infinity();
+
+    // 构建无向邻接表：将所有边的反向也加入
+    QMap<quint32, QVector<std::tuple<quint32, double, double>>> undirectedAdj;
+    for (quint32 node : graph.nodes()) {
+        const QVector<std::tuple<quint32, double, double>> *nbrs = graph.neighbors(node);
+        if (nbrs) {
+            for (const auto &[v, w, bw] : *nbrs) {
+                // 添加正向边 node -> v
+                undirectedAdj[node].append(std::make_tuple(v, w, bw));
+                // 添加反向边 v -> node
+                undirectedAdj[v].append(std::make_tuple(node, w, bw));
+            }
+        }
+    }
 
     QMap<quint32, double> distances;
     QMap<quint32, quint32> predecessors;
@@ -95,7 +91,11 @@ bool dijkstra(const Graph &graph, quint32 source,
         }
         visited.insert(u);
 
-        const QVector<std::tuple<quint32, double, double>> *nbrs = graph.neighbors(u);
+        const QVector<std::tuple<quint32, double, double>> *nbrs = nullptr;
+        auto it = undirectedAdj.find(u);
+        if (it != undirectedAdj.end()) {
+            nbrs = &it.value();
+        }
         if (!nbrs) {
             continue;
         }
@@ -114,6 +114,36 @@ bool dijkstra(const Graph &graph, quint32 source,
         }
     }
 
-    result = ShortestPathResult(source, distances, predecessors, hasPredecessor);
+    // 预先计算所有可达节点的路径
+    QMap<quint32, QVector<quint32>> paths;
+    for (auto it = distances.begin(); it != distances.end(); ++it) {
+        quint32 node = it.key();
+        double dist = it.value();
+        if (dist == INF) {
+            continue; // 不可达节点，跳过
+        }
+
+        // 重建从 source 到 node 的路径
+        QVector<quint32> path;
+        quint32 current = node;
+        while (true) {
+            path.prepend(current);
+            if (current == source) {
+                break;
+            }
+            QMap<quint32, bool>::const_iterator hasIt = hasPredecessor.find(current);
+            if (hasIt == hasPredecessor.end() || !hasIt.value()) {
+                // 没有前驱但也不是起点，说明路径断裂
+                path.clear();
+                break;
+            }
+            current = predecessors.value(current);
+        }
+        if (!path.isEmpty()) {
+            paths[node] = path;
+        }
+    }
+
+    result = ShortestPathResult(source, distances, predecessors, hasPredecessor, paths);
     return true;
 }

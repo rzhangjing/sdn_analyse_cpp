@@ -16,7 +16,7 @@
 namespace network_deployment {
 
 void teeWriteln(QTextStream& logStream, const QString& msg) {
-    qDebug().noquote() << msg;
+    //qDebug().noquote() << msg;
     logStream << msg << Qt::endl;
 }
 
@@ -528,9 +528,9 @@ void networkDeployment() {
     // 定义要处理的文件列表
     QStringList csvFiles = {
         "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {
