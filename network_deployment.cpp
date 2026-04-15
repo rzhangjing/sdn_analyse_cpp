@@ -395,7 +395,18 @@ void networkDeploymentFile(const QString& csvFile) {
     
     QString errorMsg;
     auto [success, delays] = networkDeploymentDelay(csvFile, &errorMsg);
-    
+
+    // 输出最短路径计算结果
+    if (success) {
+        teeWriteln(logStream, QString("\n---------- 最短路径计算结果 ----------"));
+        teeWriteln(logStream, QString("共计算出 %1 对节点间的最短路径").arg(delays.size()));
+        for (const auto& [source, target, delay] : delays) {
+            teeWriteln(logStream, QString("  节点 %1 -> 节点 %2 : 延迟 %3 ms")
+                .arg(source).arg(target).arg(delay, 0, 'f', 3));
+        }
+        teeWriteln(logStream, QString("--------------------------------------\n"));
+    }
+
     if (success) {
         // 按 source 和 target 排序
         std::sort(delays.begin(), delays.end(), [](const auto& a, const auto& b) {
@@ -517,9 +528,9 @@ void networkDeployment() {
     // 定义要处理的文件列表
     QStringList csvFiles = {
         "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {
