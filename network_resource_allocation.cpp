@@ -23,6 +23,24 @@ void teeWriteln(QTextStream& logStream, const QString& msg) {
 // ---------------------------------------------------------------------------
 // 辅助函数：构建跳数矩阵
 // ---------------------------------------------------------------------------
+/// 用 Floyd-Warshall 重建 source -> target 的路径,计算跳数
+static QMap<QPair<quint32, quint32>, quint32> buildHopMatrix(FloydWarshallResult& floydWarshall) {
+    QMap<QPair<quint32, quint32>, quint32> result;
+
+    QVector<quint32> nodes = floydWarshall.nodeList();
+    for (quint32 src : nodes) {
+        for (quint32 tgt : nodes) {
+            if (src == tgt) continue;
+            QVector<quint32> p = floydWarshall.path(src, tgt);
+            if (!p.isEmpty() && p.size() > 1) {
+                result.insert(qMakePair(src, tgt), static_cast<quint32>(p.size() - 1));
+            }
+        }
+    }
+
+    return result;
+}
+
 /// 以每条有向边跳数 = 1 为权重，用 Floyd-Warshall 计算所有节点对最短跳数矩阵
 static QMap<QPair<quint32, quint32>, quint32> buildHopMatrix(const QVector<NetworkEdge>& edges) {
     QMap<QPair<quint32, quint32>, quint32> result;
@@ -153,17 +171,28 @@ static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, i
 // ---------------------------------------------------------------------------
 // 步骤 3 辅助：判断链路是否在最短路径上
 // ---------------------------------------------------------------------------
-
 static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
                              const FloydWarshallResult& delayFw) {
     double dCiCj = delayFw.distance(ci, cj);
     if (qIsInf(dCiCj)) return false;
     
-    double dCiSte = delayFw.distance(ci, e.source);
-    double dEneCj = delayFw.distance(e.target, cj);
-    if (qIsInf(dCiSte) || qIsInf(dEneCj)) return false;
+    // 正向检查：ci -> e.source -> e.target -> cj
+    double dCiSrc = delayFw.distance(ci, e.source);
+    double dTgtCj = delayFw.distance(e.target, cj);
+    if (qIsFinite(dCiSrc) && qIsFinite(dTgtCj) &&
+        qAbs(dCiSrc + e.weight + dTgtCj - dCiCj) < 1e-9) {
+        return true;
+    }
     
-    return qAbs(dCiSte + e.weight + dEneCj - dCiCj) < 1e-9;
+    // 反向检查（无向图）：ci -> e.target -> e.source -> cj
+    double dCiTgt = delayFw.distance(ci, e.target);
+    double dSrcCj = delayFw.distance(e.source, cj);
+    if (qIsFinite(dCiTgt) && qIsFinite(dSrcCj) &&
+        qAbs(dCiTgt + e.weight + dSrcCj - dCiCj) < 1e-9) {
+        return true;
+    }
+    
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,17 +492,21 @@ std::optional<EecnBuild> eecnGraphBuild(
         ctx.maxw = qMax(ctx.maxw, e.weight);
     }
     
-    // 步骤 2c：计算 G 上所有节点对的最短跳数矩阵
-    ctx.gHopMap = buildHopMatrix(ctx.eSet);
-    
-    // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep
-    std::optional<FloydWarshallResult> delayFwOpt = buildDelayFw(ctx.eSet);
-    if (!delayFwOpt.has_value()) {
-        qDebug() << "构建延迟矩阵失败：图为空";
-        return std::nullopt;
+    // 步骤 2c：构建以延迟为权重的原始图 G，并缓存 Floyd-Warshall 结果
+    ctx.g = buildGraph(ctx.eSet, [](const NetworkEdge& e) { return e.weight; });
+    {
+        QString fwErr;
+        if (!floydWarshall(ctx.g, ctx.floydWarshallRes, &fwErr)) {
+            qDebug() << "构建延迟矩阵失败：" << fwErr;
+            return std::nullopt;
+        }
     }
     
-    step3ComputeWep(ctx.eSet, ctx.vc, delayFwOpt.value(), ctx.gHopMap,
+    // 步骤 2d：计算 G 上所有节点对的最短跳数矩阵
+    ctx.gHopMap = buildHopMatrix(ctx.floydWarshallRes);
+    
+    // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep（复用缓存的 FloydWarshall 结果）
+    step3ComputeWep(ctx.eSet, ctx.vc, ctx.floydWarshallRes, ctx.gHopMap,
                     ctx.mina, ctx.maxw, ctx.eAbs, alphaMin, alphaMax, beta);
     
     // 步骤 4：以 Wep 为权重跑 Floyd，生成初始 Gc

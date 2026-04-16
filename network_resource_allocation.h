@@ -84,7 +84,7 @@ struct EecnBuild {
     // ----------------------------------------------------------------
     /// 原始图 G
      Graph g;
-    /// V：所有节点集合（去重后的全部顶点）
+    /// FloydWarshallResult
     FloydWarshallResult floydWarshallRes;
     /// V：所有节点集合（去重后的全部顶点）
     QVector<quint32> v;
