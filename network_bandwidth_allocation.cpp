@@ -162,7 +162,7 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
     // 构建输出日志文件路径（与输入文件同目录）
     QFileInfo inputInfo(csvFile);
     QString logStem = inputInfo.baseName();
-    QString logFilename = QString("%1_试验2.log").arg(logStem);
+    QString logFilename = QString("%1_K为%2_试验2.log").arg(logStem).arg(k);
     QString logPath = inputInfo.absoluteDir().filePath(logFilename);
 
     QFile logFile(logPath);
@@ -200,8 +200,8 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
             // 输出每次实验结果
             teeWriteln(logStream, QString("实验 %1: B成功率=%2, C成功率=%3")
                 .arg(experimentId)
-                .arg(result.successRateB, 'f', 2)
-                .arg(result.successRateC, 'f', 2));
+                .arg(result.successRateB, 0, 'f', 2)
+                .arg(result.successRateC, 0, 'f', 2));
         }
         
         // 计算B数组的统计数据

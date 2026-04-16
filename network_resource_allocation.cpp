@@ -23,7 +23,6 @@ void teeWriteln(QTextStream& logStream, const QString& msg) {
 // ---------------------------------------------------------------------------
 // 辅助函数：构建跳数矩阵
 // ---------------------------------------------------------------------------
-
 /// 以每条有向边跳数 = 1 为权重，用 Floyd-Warshall 计算所有节点对最短跳数矩阵
 static QMap<QPair<quint32, quint32>, quint32> buildHopMatrix(const QVector<NetworkEdge>& edges) {
     QMap<QPair<quint32, quint32>, quint32> result;
@@ -103,7 +102,6 @@ static bool step1LoadEdges(const QString& filePath, QVector<NetworkEdge>& edges,
 // ---------------------------------------------------------------------------
 // 步骤 2：收集顶点集 V，随机选取边缘服务器 Vc
 // ---------------------------------------------------------------------------
-
 static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
     const QVector<NetworkEdge>& edges, int num) {
     
@@ -437,7 +435,6 @@ static QVector<NetworkEdge> step6Prune(const QVector<NetworkEdge>& gcInitial,
 // ---------------------------------------------------------------------------
 // 主算法：eecnGraphBuild
 // ---------------------------------------------------------------------------
-
 std::optional<EecnBuild> eecnGraphBuild(
     const QString& filePath,
     int edgeServerNum,
@@ -515,6 +512,27 @@ std::optional<EecnBuild> eecnGraphBuild(
 // ---------------------------------------------------------------------------
 // 处理单个文件
 // ---------------------------------------------------------------------------
+static void networkAllocationPara(const QString& csvFile, QTextStream& logStream,
+int edgeServerNum,  double alphaMin, double alphaMax, double beta) {
+    // 输出计算参数
+    teeWriteln(logStream, QString("Number of edge servers=%1, αmin=%2, αmax=%3, beta=%4")
+                              .arg(edgeServerNum).arg(alphaMin).arg(alphaMax).arg(beta));
+
+    std::optional<EecnBuild> ctxOpt = eecnGraphBuild(csvFile, edgeServerNum, alphaMin, alphaMax, beta);
+
+    if (ctxOpt.has_value()) {
+        const EecnBuild& ctx = ctxOpt.value();
+        if (ctx.result.has_value()) {
+            const EecnGraph& graph = ctx.result.value();
+            teeWriteln(logStream, QString("EECN构建完成: 边缘服务器数=%1, 链路数=%2, cost_Gc=%3")
+                                      .arg(graph.servers.size())
+                                      .arg(graph.edges.size())
+                                      .arg(graph.costGc, 0, 'f', 6));
+        }
+    } else {
+        teeWriteln(logStream, "EECN构建失败");
+    }
+}
 
 static void networkAllocationFile(const QString& csvFile) {
     QFileInfo inputInfo(csvFile);
@@ -532,40 +550,35 @@ static void networkAllocationFile(const QString& csvFile) {
     logStream.setEncoding(QStringConverter::Utf8);
     
     teeWriteln(logStream, QString("\n========== 处理文件: %1 ==========").arg(csvFile));
-    
-    // 调用 eecn_graph_build（使用默认参数：10台边缘服务器，αmin=0.5，αmax=5.0，β=2.0）
-    int edgeServerNum = 10;
-    double alphaMin = 0.5;
-    double alphaMax = 5.0;
-    double beta = 2.0;
-    
-    teeWriteln(logStream, QString("edge_server_num=%1, alpha_min=%2, alpha_max=%3, beta=%4")
-        .arg(edgeServerNum).arg(alphaMin).arg(alphaMax).arg(beta));
-    
-    std::optional<EecnBuild> ctxOpt = eecnGraphBuild(csvFile, edgeServerNum, alphaMin, alphaMax, beta);
-    
-    if (ctxOpt.has_value()) {
-        const EecnBuild& ctx = ctxOpt.value();
-        if (ctx.result.has_value()) {
-            const EecnGraph& graph = ctx.result.value();
-            teeWriteln(logStream, QString("EECN构建完成: 边缘服务器数=%1, 链路数=%2, cost_Gc=%3")
-                .arg(graph.servers.size())
-                .arg(graph.edges.size())
-                .arg(graph.costGc, 0, 'f', 6));
-        }
-    } else {
-        teeWriteln(logStream, "EECN构建失败");
-    }
-    
+    networkAllocationPara(csvFile, logStream, 20,  1.0, 7.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 20,  1.0, 5.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 20,  1.0, 5.0, 1.4);
+    networkAllocationPara(csvFile, logStream, 20,  1.0, 5.0, 1.3);
+
+    networkAllocationPara(csvFile, logStream, 40,  1.0, 7.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.4);
+    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.3);
+
+    networkAllocationPara(csvFile, logStream, 60,  1.0, 7.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.4);
+    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.3);
+
+    networkAllocationPara(csvFile, logStream, 80,  1.0, 7.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.2);
+    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.4);
+    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.3);
+
     logFile.close();
 }
 
 void networkAllocation() {
     QStringList csvFiles = {
         "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-1000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-2000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-3000-1.txt",
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-4000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-2000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-3000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {

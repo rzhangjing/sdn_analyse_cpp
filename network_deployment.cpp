@@ -561,7 +561,7 @@ void networkDeploymentFile(const QString& csvFile) {
                     //a为数组C的偏移量  c为数组B的偏移量
                     int a = (int)controlMaxDistance / 1000;
                     int c = (int)result2.value().maxDelay / 1000;
-                    network_bandwidth_allocation::networkBandwidthAllocationCapabilityWork(csvFile, k1, a, c);
+                    network_bandwidth_allocation::networkBandwidthAllocationCapabilityWork(csvFile, k2, a, c);
                 }
             } else {
                 teeWriteln(logStream, QString("K-中心算法第2次执行失败 (k=%1)").arg(k2));
