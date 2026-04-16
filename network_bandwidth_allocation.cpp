@@ -18,7 +18,7 @@ namespace network_bandwidth_allocation {
 constexpr int ARRAY_SIZE = 2000;
 constexpr int EXPERIMENT_START = 99;
 constexpr int EXPERIMENT_END = 1000;
-constexpr int EXPERIMENT_COUNT = EXPERIMENT_END - EXPERIMENT_START; // 901
+constexpr int EXPERIMENT_COUNT = 900;
 
 /// 辅助函数：同时输出到日志文件
 static void teeWriteln(QTextStream& logStream, const QString& msg) {
@@ -26,69 +26,69 @@ static void teeWriteln(QTextStream& logStream, const QString& msg) {
 }
 
 /// 初始化数组A
-/// A[0]←0到20之间的随机数，然后A[i] = A[i-1] + max{0, -q与q之间的随机数}
-static void initializeArrayA(QVector<double>& arrayA, double q) {
+/// A[0]←0到20之间的随机整数，然后A[i] = A[i-1] + max{0, -q与q之间的随机整数}
+static void initializeArrayA(QVector<int>& arrayA, double q) {
     QRandomGenerator* rng = QRandomGenerator::global();
     
-    // A[0] 为 0 到 20 之间的随机数
-    arrayA[0] = rng->generateDouble() * 20.0;
+    // A[0] 为 0 到 20 之间的随机整数
+    arrayA[0] = static_cast<int>(rng->generateDouble() * 20.0);
     
     // 填充 A[1] 到 A[999]
     for (int i = 1; i < 1000; ++i) {
-        // -q 到 q 之间的随机数
+        // -q 到 q 之间的随机数，取整
         double randomStep = rng->generateDouble() * 2.0 * q - q;
-        // max{0, 随机数}
-        double step = qMax(0.0, randomStep);
+        // max{0, 随机数} 取整
+        int step = qMax(0, static_cast<int>(randomStep));
         arrayA[i] = arrayA[i - 1] + step;
     }
 }
 
 /// 计算成功率
 /// t从99到999，如果array[t] >= array_a[t]，s增加1
-/// 返回 s/901 保留两位小数
-static double calculateSuccessRate(const QVector<double>& array, const QVector<double>& arrayA) {
+/// 返回 s/900 保留两位小数
+static double calculateSuccessRate(const QVector<int>& arrayB, const QVector<int>& arrayA) {
     int s = 0;
     for (int t = EXPERIMENT_START; t < EXPERIMENT_END; ++t) {
-        if (array[t] >= arrayA[t]) {
+        if (arrayB[t] >= arrayA[t]) {
             ++s;
         }
     }
-    // s/901 保留两位小数
+    // s/900 保留两位小数
     double rate = static_cast<double>(s) / EXPERIMENT_COUNT;
     return static_cast<double>(qRound(rate * 100.0)) / 100.0;
 }
 
 /// 处理数组B并计算成功率
-static double processArrayB(QVector<double>& arrayB, const QVector<double>& arrayA, int c) {
+static double processArrayB(QVector<int>& arrayB, const QVector<int>& arrayA, int c) {
     // 阶段1: i从999到c，B[i] = A[i-c]
     for (int i = 999; i >= c; --i) {
         arrayB[i] = arrayA[i - c];
     }
     
     // 复制B到B'
-    QVector<double> arrayBPrime = arrayB;
+    QVector<int> arrayBPrime = arrayB;
     
     // 阶段2: j从c到c+10，B[j] = B[j] + 5
     int endJ1 = qMin(c + 10, ARRAY_SIZE);
     for (int j = c; j < endJ1; ++j) {
-        arrayB[j] += 5.0;
+        arrayB[j] += 5;
     }
     
     // 阶段3: j从c+10到999，B[j] = B[j] + 5 + X
     // X是j之前10个元素的最大增长值，增长值 = |B'[k] - B'[k-1]|
-    int startJ2 = c + 10;
+    int startJ2 = endJ1;
     for (int j = startJ2; j < 1000; ++j) {
         // 计算j之前10个元素的最大增长值
-        double maxGrowth = 0.0;
+        int maxGrowth = 0;
         for (int k = j - 10; k < j; ++k) {
             if (k > 0 && k < ARRAY_SIZE) {
-                double growth = qAbs(arrayBPrime[k] - arrayBPrime[k - 1]);
+                int growth = qAbs(arrayBPrime[k] - arrayBPrime[k - 1]);
                 if (growth > maxGrowth) {
                     maxGrowth = growth;
                 }
             }
         }
-        arrayB[j] = arrayB[j] + 5.0 + maxGrowth;
+        arrayB[j] = arrayB[j] + 5 + maxGrowth;
     }
     
     // 计算成功率: t从99到999，如果B[t] >= A[t]，s增加1
@@ -96,19 +96,18 @@ static double processArrayB(QVector<double>& arrayB, const QVector<double>& arra
 }
 
 /// 处理数组C并计算成功率
-static double processArrayC(QVector<double>& arrayC, const QVector<double>& arrayA, int a) {
+static double processArrayC(QVector<int>& arrayC, const QVector<int>& arrayA, int a) {
     // 阶段1: i从999到a，C[i] = A[i-a]
     for (int i = 999; i >= a; --i) {
         arrayC[i] = arrayA[i - a];
     }
     
     // 复制C到C'（未使用但保持逻辑一致）
-    Q_UNUSED(arrayC);
-    QVector<double> arrayCPrime = arrayC;
+    QVector<int> arrayCPrime = arrayC;
     
     // 阶段2: j从a到999，C[j] = C[j] + 5
     for (int j = a; j < 1000; ++j) {
-        arrayC[j] += 5.0;
+        arrayC[j] += 5;
     }
     
     // 计算成功率: t从99到999，如果C[t] >= A[t]，s增加1
@@ -142,9 +141,9 @@ std::tuple<double, double, double> calculateStatistics(const QVector<double>& ra
 
 ExperimentResult networkBandwidthAllocationCapability(int a, int c, double q) {
     // 1. 初始化3个数组
-    QVector<double> arrayA(ARRAY_SIZE, 0.0);
-    QVector<double> arrayB(ARRAY_SIZE, 0.0);
-    QVector<double> arrayC(ARRAY_SIZE, 0.0);
+    QVector<int> arrayA(ARRAY_SIZE, 0);
+    QVector<int> arrayB(ARRAY_SIZE, 0);
+    QVector<int> arrayC(ARRAY_SIZE, 0);
     
     // 2. 对数组A赋值
     initializeArrayA(arrayA, q);
@@ -180,7 +179,7 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
     
     teeWriteln(logStream, "\n========== 网络带宽分配能力测试 ==========");
     teeWriteln(logStream, QString("输入文件: %1 K值: %2").arg(csvFile).arg(k));
-    teeWriteln(logStream, QString("参数: a=%1, c=%2, count=50").arg(a).arg(c));
+    teeWriteln(logStream, QString("参数: a=%1, c=%2").arg(a).arg(c));
     teeWriteln(logStream, QString("每个q值运行%1 次\n").arg(runCount));
     
     for (double q : qValues) {
@@ -200,9 +199,9 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
             
             // 输出每次实验结果
             teeWriteln(logStream, QString("实验 %1: B成功率=%2, C成功率=%3")
-                .arg(experimentId, 2)
-                .arg(result.successRateB, 0, 'f', 2)
-                .arg(result.successRateC, 0, 'f', 2));
+                .arg(experimentId)
+                .arg(result.successRateB, 'f', 2)
+                .arg(result.successRateC, 'f', 2));
         }
         
         // 计算B数组的统计数据
