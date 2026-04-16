@@ -323,10 +323,11 @@ static QVector<NetworkEdge> step4BuildInitialGc(const QVector<NetworkEdge>& edge
         }
     }
     
-    // 按 (source, target) 建立快速查找表
+    // 按 (source, target) 和 (target, source) 建立快速查找表（无向图双向映射）
     QMap<QPair<quint32, quint32>, NetworkEdge> edgeMap;
     for (const NetworkEdge& e : edges) {
         edgeMap.insert(qMakePair(e.source, e.target), e);
+        edgeMap.insert(qMakePair(e.target, e.source), e);
     }
     
     QVector<NetworkEdge> gcInitial;
