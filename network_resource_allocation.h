@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <optional>
 #include <functional>
+#include "floyd_warshall.h"
 
 /// 一条链路的完整信息
 ///
@@ -81,6 +82,10 @@ struct EecnBuild {
     // ----------------------------------------------------------------
     // 图构建过程数据
     // ----------------------------------------------------------------
+    /// 原始图 G
+     Graph g;
+    /// V：所有节点集合（去重后的全部顶点）
+    FloydWarshallResult floydWarshallRes;
     /// V：所有节点集合（去重后的全部顶点）
     QVector<quint32> v;
     /// E：原始图 G 的全部链路（含完整 NetworkEdge 信息）

@@ -104,7 +104,7 @@ bool floydWarshall(const Graph &graph, FloydWarshallResult &result, QString *err
         dist[i][i] = 0.0;
     }
 
-    // 根据图的边初始化
+    // 根据图的边初始化（无向图：同时初始化正向和反向边）
     for (int i = 0; i < n; ++i) {
         quint32 u = nodeList[i];
         const QVector<std::tuple<quint32, double, double>> *nbrs = graph.neighbors(u);
@@ -113,9 +113,15 @@ bool floydWarshall(const Graph &graph, FloydWarshallResult &result, QString *err
             int j = nodeIndex.value(v, -1);
             if (j < 0) continue;
             // 若存在多条边，取最小权重
+            // 正向边 u -> v
             if (w < dist[i][j]) {
                 dist[i][j] = w;
                 nextNode[i][j] = j;
+            }
+            // 反向边 v -> u（无向图）
+            if (w < dist[j][i]) {
+                dist[j][i] = w;
+                nextNode[j][i] = i;
             }
         }
     }
