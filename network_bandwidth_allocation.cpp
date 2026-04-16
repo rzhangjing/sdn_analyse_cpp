@@ -20,6 +20,11 @@ constexpr int EXPERIMENT_START = 99;
 constexpr int EXPERIMENT_END = 1000;
 constexpr int EXPERIMENT_COUNT = EXPERIMENT_END - EXPERIMENT_START; // 901
 
+/// 辅助函数：同时输出到日志文件
+static void teeWriteln(QTextStream& logStream, const QString& msg) {
+    logStream << msg << Qt::endl;
+}
+
 /// 初始化数组A
 /// A[0]←0到20之间的随机数，然后A[i] = A[i-1] + max{0, -q与q之间的随机数}
 static void initializeArrayA(QVector<double>& arrayA, double q) {
@@ -167,15 +172,19 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
         return;
     }
 
+    QTextStream logStream(&logFile);
+    logStream.setEncoding(QStringConverter::Utf8);
+
     QVector<double> qValues = {2.0, 4.0, 6.0, 8.0}; // 不同的q值
     int runCount = 50; // 每个q值运行50次
     
-    qDebug().noquote() << "\n========== 网络带宽分配能力测试 ==========";
-    qDebug().noquote() << QString("参数: a=%1, c=%2").arg(a).arg(c);
-    qDebug().noquote() << QString("每个q值运行%1 次\n").arg(runCount);
+    teeWriteln(logStream, "\n========== 网络带宽分配能力测试 ==========");
+    teeWriteln(logStream, QString("输入文件: %1 K值: %2").arg(csvFile).arg(k));
+    teeWriteln(logStream, QString("参数: a=%1, c=%2, count=50").arg(a).arg(c));
+    teeWriteln(logStream, QString("每个q值运行%1 次\n").arg(runCount));
     
     for (double q : qValues) {
-        qDebug().noquote() << QString("\n----- q = %1 -----").arg(q);
+        teeWriteln(logStream, QString("\n----- q = %1 -----").arg(q));
         
         // 存储所有实验的成功率
         QVector<double> bSuccessRates;
@@ -190,10 +199,10 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
             cSuccessRates.append(result.successRateC);
             
             // 输出每次实验结果
-            qDebug().noquote() << QString("实验 %1: B成功率=%2, C成功率=%3")
+            teeWriteln(logStream, QString("实验 %1: B成功率=%2, C成功率=%3")
                 .arg(experimentId, 2)
                 .arg(result.successRateB, 0, 'f', 2)
-                .arg(result.successRateC, 0, 'f', 2);
+                .arg(result.successRateC, 0, 'f', 2));
         }
         
         // 计算B数组的统计数据
@@ -203,14 +212,15 @@ void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int
         auto [cMax, cAvg, cMin] = calculateStatistics(cSuccessRates);
         
         // 输出统计结果
-        qDebug().noquote() << QString("\n--- q = %1 统计结果 ---").arg(q);
-        qDebug().noquote() << QString("B数组: 最大成功率=%1, 平均成功率=%2, 最小成功率=%3")
-            .arg(bMax, 0, 'f', 2).arg(bAvg, 0, 'f', 2).arg(bMin, 0, 'f', 2);
-        qDebug().noquote() << QString("C数组: 最大成功率=%1, 平均成功率=%2, 最小成功率=%3")
-            .arg(cMax, 0, 'f', 2).arg(cAvg, 0, 'f', 2).arg(cMin, 0, 'f', 2);
+        teeWriteln(logStream, QString("\n--- q = %1 统计结果 ---").arg(q));
+        teeWriteln(logStream, QString("B数组: 最大成功率=%1, 平均成功率=%2, 最小成功率=%3")
+            .arg(bMax, 0, 'f', 2).arg(bAvg, 0, 'f', 2).arg(bMin, 0, 'f', 2));
+        teeWriteln(logStream, QString("C数组: 最大成功率=%1, 平均成功率=%2, 最小成功率=%3")
+            .arg(cMax, 0, 'f', 2).arg(cAvg, 0, 'f', 2).arg(cMin, 0, 'f', 2));
     }
     
-    qDebug().noquote() << "\n========== 测试完成 ==========";
+    teeWriteln(logStream, "\n========== 测试完成 ==========");
+    logFile.close();
 }
 
 } // namespace network_bandwidth_allocation
