@@ -12,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include "network_bandwidth_allocation.h"
 
 namespace network_deployment {
 
@@ -116,9 +117,6 @@ std::optional<KCenterResult> kCenterAlgorithm(
         return distanceMap.value(qMakePair(a, b), std::numeric_limits<double>::infinity());
     };
 
-    // 使用标准的贪心 2-近似 k-center 算法 (Gonzalez 1985)
-    // 优化：维护每个节点到最近中心的距离数组，避免每轮重复计算
-
     // 节点索引映射：node -> index in nodeList
     QMap<quint32, int> nodeToIndex;
     for (int i = 0; i < n; ++i) {
@@ -134,18 +132,46 @@ std::optional<KCenterResult> kCenterAlgorithm(
     centers.reserve(k);
     QSet<quint32> centerSet;
 
-    // 1. 选择第一个中心：选择与其他节点平均距离最小的节点
-    quint32 bestFirstCenter = nodeList[0];
-    double minAvgDist = std::numeric_limits<double>::infinity();
+    // ==================== 基于网络度和延迟的加权 k-center 算法 ====================
 
-    for (quint32 candidate : nodeList) {
+    // 1. 计算每个节点的网络度（degree）：统计该节点作为 source 或 target 出现的次数
+    QMap<quint32, int> nodeDegree;
+    for (const auto& [source, target, delay] : delays) {
+        Q_UNUSED(delay);
+        nodeDegree[source]++;
+        nodeDegree[target]++;
+    }
+
+    // 2. 计算每个节点的平均延迟和中心性分数
+    // centrality(v) = degree(v) / avgDelay(v)
+    // 中心性越高的节点越适合作为控制器部署位置（高度数 + 低平均延迟）
+    QMap<quint32, double> nodeCentrality;
+    for (quint32 node : nodeList) {
         double totalDist = 0.0;
-        for (quint32 node : nodeList) {
-            totalDist += getDistance(candidate, node);
+        int reachableCount = 0;
+        for (quint32 other : nodeList) {
+            if (node != other) {
+                double dist = getDistance(node, other);
+                if (!qIsInf(dist)) {
+                    totalDist += dist;
+                    reachableCount++;
+                }
+            }
         }
-        double avgDist = totalDist / n;
-        if (avgDist < minAvgDist) {
-            minAvgDist = avgDist;
+        double avgDelay = (reachableCount > 0) ? (totalDist / reachableCount) : std::numeric_limits<double>::infinity();
+        double degree = static_cast<double>(nodeDegree.value(node, 0));
+        // 中心性分数：度数越高、平均延迟越低，分数越高
+        double centrality = (avgDelay > 0 && !qIsInf(avgDelay)) ? (degree / avgDelay) : 0.0;
+        nodeCentrality[node] = centrality;
+    }
+
+    // 3. 选择第一个中心：选择中心性分数最高的节点
+    quint32 bestFirstCenter = nodeList[0];
+    double maxCentrality = -1.0;
+    for (quint32 candidate : nodeList) {
+        double centrality = nodeCentrality.value(candidate, 0.0);
+        if (centrality > maxCentrality) {
+            maxCentrality = centrality;
             bestFirstCenter = candidate;
         }
     }
@@ -159,33 +185,50 @@ std::optional<KCenterResult> kCenterAlgorithm(
         nearestCenter[i] = bestFirstCenter;
     }
 
-    // 2. 迭代选择剩余的 k-1 个中心
-    // 每轮选择距离当前中心集合最远的节点作为新中心
+    // 4. 迭代选择剩余的 k-1 个中心
+    // 使用加权 farthest-first 策略：
+    // score(v) = minDistToCenter(v) × (1 + α / centrality(v))
+    // 其中 α 是权重因子，使得远离现有中心且中心性较低的节点优先被选为新中心
+    const double alpha = 0.5;  // 权重因子
+
     while (centers.size() < k) {
-        // 找到距离当前中心集合最远的节点
-        double maxMinDistance = -1.0;
-        int farthestIndex = -1;
+        // 计算每个非中心节点的加权分数
+        double maxScore = -1.0;
+        int bestIndex = -1;
 
         for (int i = 0; i < n; ++i) {
             quint32 node = nodeList[i];
             if (centerSet.contains(node)) {
                 continue;
             }
-            if (minDistances[i] > maxMinDistance) {
-                maxMinDistance = minDistances[i];
-                farthestIndex = i;
+
+            double minDist = minDistances[i];
+            double centrality = nodeCentrality.value(node, 0.0);
+
+            // 加权分数：距离越远、中心性越低，分数越高
+            // 如果中心性为0或极小，使用基础分数
+            double score;
+            if (centrality > 0.000001) {
+                score = minDist * (1.0 + alpha / centrality);
+            } else {
+                score = minDist * (1.0 + alpha * 1000.0);  // 中心性极低的节点给予高权重
+            }
+
+            if (score > maxScore) {
+                maxScore = score;
+                bestIndex = i;
             }
         }
 
-        if (farthestIndex == -1) {
+        if (bestIndex == -1) {
             break; // 所有节点都已成为中心
         }
 
-        quint32 nextCenter = nodeList[farthestIndex];
+        quint32 nextCenter = nodeList[bestIndex];
         centers.append(nextCenter);
         centerSet.insert(nextCenter);
 
-        // 更新所有非中心节点到新中心的距离
+        // 更新所有非中心节点到新中心的距离（增量更新，O(n)每轮）
         for (int i = 0; i < n; ++i) {
             quint32 node = nodeList[i];
             if (centerSet.contains(node)) {
@@ -199,7 +242,7 @@ std::optional<KCenterResult> kCenterAlgorithm(
         }
     }
 
-    // 3. 构建节点分配结果
+    // 5. 构建节点分配结果
     QVector<std::tuple<quint32, quint32, double>> nodeAssignments;
     QMap<quint32, QVector<QPair<quint32, double>>> centerToNodes;
 
@@ -214,7 +257,7 @@ std::optional<KCenterResult> kCenterAlgorithm(
         centerToNodes[assignedCenter].append(qMakePair(node, minDist));
     }
 
-    // 4. 计算每个中心节点的统计信息
+    // 6. 计算每个中心节点的统计信息
     QVector<std::tuple<quint32, int, double, double>> centerStats;
     double globalMaxDelay = 0.0;
     double totalAveDelay = 0.0;
@@ -490,6 +533,11 @@ void networkDeploymentFile(const QString& csvFile) {
                     ratioK1 = std::make_pair(
                         result1.value().maxDelay / controlMaxDistance,
                         result1.value().aveDelay / controlAvgDistance);
+
+                    //a为数组C的偏移量  c为数组B的偏移量
+                    int a = (int)controlMaxDistance / 1000;
+                    int c = (int)result1.value().maxDelay / 1000;
+                    network_bandwidth_allocation::networkBandwidthAllocationCapabilityWork(csvFile, k1, a, c);
                 }
             } else {
                 teeWriteln(logStream, QString("K-中心算法第1次执行失败 (k=%1)").arg(k1));
@@ -510,6 +558,10 @@ void networkDeploymentFile(const QString& csvFile) {
                     ratioK2 = std::make_pair(
                         result2.value().maxDelay / controlMaxDistance,
                         result2.value().aveDelay / controlAvgDistance);
+                    //a为数组C的偏移量  c为数组B的偏移量
+                    int a = (int)controlMaxDistance / 1000;
+                    int c = (int)result2.value().maxDelay / 1000;
+                    network_bandwidth_allocation::networkBandwidthAllocationCapabilityWork(csvFile, k1, a, c);
                 }
             } else {
                 teeWriteln(logStream, QString("K-中心算法第2次执行失败 (k=%1)").arg(k2));
@@ -558,9 +610,9 @@ void networkDeployment() {
     // 定义要处理的文件列表
     QStringList csvFiles = {
         "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {

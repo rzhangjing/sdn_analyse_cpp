@@ -18,7 +18,8 @@ struct ExperimentResult {
 namespace network_bandwidth_allocation {
 
 /// 主入口：网络带宽分配能力测试
-void networkBandwidthAllocationCapabilityWork();
+//a为数组C的偏移量  c为数组B的偏移量
+void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int c);
 
 /// 网络带宽分配能力测试
 /// 输入: a - 数组C的偏移量, c - 数组B的偏移量, q - A数组增长步长参数

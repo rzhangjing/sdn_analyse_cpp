@@ -2,6 +2,13 @@
 #include <QRandomGenerator>
 #include <QDebug>
 #include <QtMath>
+#include <QFile>
+#include <QFileInfo>
+#include <QDir>
+#include <QTextStream>
+#include <QDateTime>
+#include <QDebug>
+#include <QtMath>
 #include <algorithm>
 #include <cmath>
 
@@ -146,10 +153,20 @@ ExperimentResult networkBandwidthAllocationCapability(int a, int c, double q) {
     return ExperimentResult(1, successRateB, successRateC);
 }
 
-void networkBandwidthAllocationCapabilityWork() {
-    // 定义参数
-    int a = 3;  // 数组C的偏移量
-    int c = 2;  // 数组B的偏移量
+//a为数组C的偏移量  c为数组B的偏移量
+void networkBandwidthAllocationCapabilityWork(QString csvFile, int k, int a, int c) {
+    // 构建输出日志文件路径（与输入文件同目录）
+    QFileInfo inputInfo(csvFile);
+    QString logStem = inputInfo.baseName();
+    QString logFilename = QString("%1_试验2.log").arg(logStem);
+    QString logPath = inputInfo.absoluteDir().filePath(logFilename);
+
+    QFile logFile(logPath);
+    if (!logFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug().noquote() << QString("创建日志文件失败: %1").arg(logPath);
+        return;
+    }
+
     QVector<double> qValues = {2.0, 4.0, 6.0, 8.0}; // 不同的q值
     int runCount = 50; // 每个q值运行50次
     
