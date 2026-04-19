@@ -383,11 +383,8 @@ static void tryRemoveEdges(QVector<NetworkEdge>& gc, const QVector<NetworkEdge>&
             NetworkEdge removed = gc.takeAt(pos);
             QMap<QPair<quint32, quint32>, quint32> newHm = buildHopMatrix(gc);
             int newViolations = countViolations(newHm, gHopMap, vc, alphaMin, alphaMax, beta, eAbs);
-            
-            if (newViolations <= currentViolations) {
-                // 保留移除，更新违约数
-                currentViolations = newViolations;
-            } else {
+            if (newViolations > currentViolations)
+            {
                 // 恢复
                 gc.append(removed);
             }
@@ -408,7 +405,7 @@ static QVector<NetworkEdge> step6Prune(const QVector<NetworkEdge>& gcInitial,
     for (const NetworkEdge& e : gcInitial) {
         gcInitialSet.insert(qMakePair(e.source, e.target));
     }
-    
+
     QVector<NetworkEdge> a;
     for (const NetworkEdge& e : allEdges) {
         if (!gcInitialSet.contains(qMakePair(e.source, e.target))) {
@@ -432,22 +429,8 @@ static QVector<NetworkEdge> step6Prune(const QVector<NetworkEdge>& gcInitial,
     
     // 处理 A
     tryRemoveEdges(gc, a, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
-    
-    // 处理 B（过滤已移除的边）
-    QVector<NetworkEdge> bFiltered;
-    for (const NetworkEdge& e : b) {
-        bool found = false;
-        for (const NetworkEdge& g : gc) {
-            if (g.source == e.source && g.target == e.target) {
-                found = true;
-                break;
-            }
-        }
-        if (found) {
-            bFiltered.append(e);
-        }
-    }
-    tryRemoveEdges(gc, bFiltered, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
+    // 处理 B
+    tryRemoveEdges(gc, b, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
     
     return gc;
 }
@@ -608,10 +591,10 @@ static void networkAllocationFile(const QString& csvFile) {
 
 void networkAllocation() {
     QStringList csvFiles = {
-        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-1000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-2000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-3000-1.txt",
-//        "D:\\张新常\\网络试验学习\\20260102\\网络拓扑\\Waxman-4000-1.txt",
+        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-1000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-2000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-3000-1.txt",
+//        "D:\\张新常\\网络试验学习\\20260103\\网络拓扑\\Waxman-4000-1.txt",
     };
     
     for (const QString& csvFile : csvFiles) {

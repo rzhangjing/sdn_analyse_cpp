@@ -55,7 +55,6 @@ QVector<quint32> FloydWarshallResult::nodeList() const
 }
 
 // -------------------- floydWarshall 算法实现 --------------------
-
 bool floydWarshall(const Graph &graph, FloydWarshallResult &result, QString *errorMsg)
 {
     if (graph.isEmpty()) {

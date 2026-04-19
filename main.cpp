@@ -14,11 +14,11 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
 
     std::cout << "\n正在执行网络部署延迟分析..." << std::endl;
-    network_deployment::networkDeployment();
+    //network_deployment::networkDeployment();
     std::cout << "\n网络部署延迟分析完成。" << std::endl;
         
     std::cout << "\n正在执行网络资源分配 EECN 构建..." << std::endl;
-    //network_resource_allocation::networkAllocation();
+    network_resource_allocation::networkAllocation();
     std::cout << "\n网络资源分配 EECN 构建完成。" << std::endl;
 
     return 0;
