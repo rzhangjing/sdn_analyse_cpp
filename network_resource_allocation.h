@@ -39,7 +39,7 @@ struct NetworkEdge {
     /// Wep：链路加权成本 = We × hs_e_G
     double weightedCost;
     // 最短路径
-    QVector<quint32> paths;
+    QVector<quint32> path;
 
     NetworkEdge() 
         : source(0), target(0), bandwidth(0.0), bec(0.0), 

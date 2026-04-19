@@ -336,7 +336,6 @@ static void step4BuildInitialGc(EecnBuild& ctx) {
 // ---------------------------------------------------------------------------
 // 步骤 5：检查跳数约束
 // ---------------------------------------------------------------------------
-
 static int countViolations(const QMap<QPair<quint32, quint32>, quint32>& gcHopMap,
                            const QMap<QPair<quint32, quint32>, quint32>& gHopMap,
                            const QVector<quint32>& vc,
@@ -365,7 +364,6 @@ static int countViolations(const QMap<QPair<quint32, quint32>, quint32>& gcHopMa
 // ---------------------------------------------------------------------------
 // 步骤 6：剪枝算法
 // ---------------------------------------------------------------------------
-
 static void tryRemoveEdges(QVector<NetworkEdge>& gc, const QVector<NetworkEdge>& candidates,
                            const QVector<quint32>& vc,
                            const QMap<QPair<quint32, quint32>, quint32>& gHopMap,
@@ -430,8 +428,7 @@ static QVector<NetworkEdge> step6Prune(const QVector<NetworkEdge>& gcInitial,
     
     // 计算当前 Gc 的基线违约数
     QMap<QPair<quint32, quint32>, quint32> hm = buildHopMatrix(gc);
-    int baselineViolations = countViolations(hm, gHopMap, vc, alphaMin, alphaMax, beta, eAbs);
-    int currentViolations = baselineViolations;
+    int currentViolations = countViolations(hm, gHopMap, vc, alphaMin, alphaMax, beta, eAbs);
     
     // 处理 A
     tryRemoveEdges(gc, a, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
@@ -496,6 +493,11 @@ std::optional<EecnBuild> eecnGraphBuild(
         }
     }
     
+    // 步骤 2c+：为每条边计算最短路径
+    for (NetworkEdge& e : ctx.eSet) {
+        e.path = ctx.floydWarshallRes.path(e.source, e.target);
+    }
+
     // 步骤 2d：计算 G 上所有节点对的最短跳数矩阵
     ctx.gHopMap = buildHopMatrix(ctx.floydWarshallRes);
     
@@ -505,6 +507,10 @@ std::optional<EecnBuild> eecnGraphBuild(
     
     // 步骤 4：以 Wep 为权重跑 Floyd，生成 gc 和初始 gcInitial
     step4BuildInitialGc(ctx);
+    // 对ctx中的eSet按照hsEG降序排序
+    std::sort(ctx.eSet.begin(), ctx.eSet.end(), [](const NetworkEdge& a, const NetworkEdge& b) {
+        return a.hsEG > b.hsEG;
+    });
     
     // 步骤 5：检查初始 Gc 是否满足跳数约束
     QMap<QPair<quint32, quint32>, quint32> gcHopMap = buildHopMatrix(ctx.gcInitial);
