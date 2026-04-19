@@ -292,48 +292,45 @@ static void step3ComputeWep(QVector<NetworkEdge>& edges, const QVector<quint32>&
 // ---------------------------------------------------------------------------
 // 步骤 4：构建初始 Gc
 // ---------------------------------------------------------------------------
-
-static QVector<NetworkEdge> step4BuildInitialGc(const QVector<NetworkEdge>& edges,
-                                                 const QVector<quint32>& vc) {
+static void step4BuildInitialGc(EecnBuild& ctx) {
     // 构建以 Wep 为权重的图
-    Graph g = buildGraph(edges, [](const NetworkEdge& e) { 
+    ctx.gc = buildGraph(ctx.eSet, [](const NetworkEdge& e) { 
         return qMax(e.weightedCost, 0.0); 
     });
     
     FloydWarshallResult wepFw;
     QString err;
-    if (!floydWarshall(g, wepFw, &err)) {
-        return QVector<NetworkEdge>();
+    if (!floydWarshall(ctx.gc, wepFw, &err)) {
+        ctx.gcInitial.clear();
+        return;
     }
     
     // 收集所有服务器对最短路径上的边
-    QSet<QPair<quint32, quint32>> gcSet;
-    for (quint32 ci : vc) {
-        for (quint32 cj : vc) {
+    ctx.gcSet.clear();
+    for (quint32 ci : ctx.vc) {
+        for (quint32 cj : ctx.vc) {
             if (ci == cj) continue;
             
             QVector<quint32> path = wepFw.path(ci, cj);
             for (int i = 0; i < path.size() - 1; ++i) {
-                gcSet.insert(qMakePair(path[i], path[i + 1]));
+                ctx.gcSet.insert(qMakePair(path[i], path[i + 1]));
             }
         }
     }
     
     // 按 (source, target) 和 (target, source) 建立快速查找表（无向图双向映射）
-    QMap<QPair<quint32, quint32>, NetworkEdge> edgeMap;
-    for (const NetworkEdge& e : edges) {
-        edgeMap.insert(qMakePair(e.source, e.target), e);
-        edgeMap.insert(qMakePair(e.target, e.source), e);
+    ctx.edgeMap.clear();
+    for (const NetworkEdge& e : ctx.eSet) {
+        ctx.edgeMap.insert(qMakePair(e.source, e.target), e);
+        ctx.edgeMap.insert(qMakePair(e.target, e.source), e);
     }
     
-    QVector<NetworkEdge> gcInitial;
-    for (const auto& key : gcSet) {
-        if (edgeMap.contains(key)) {
-            gcInitial.append(edgeMap[key]);
+    ctx.gcInitial.clear();
+    for (const auto& key : ctx.gcSet) {
+        if (ctx.edgeMap.contains(key)) {
+            ctx.gcInitial.append(ctx.edgeMap[key]);
         }
     }
-    
-    return gcInitial;
 }
 
 // ---------------------------------------------------------------------------
@@ -506,8 +503,8 @@ std::optional<EecnBuild> eecnGraphBuild(
     step3ComputeWep(ctx.eSet, ctx.vc, ctx.floydWarshallRes, ctx.gHopMap,
                     ctx.mina, ctx.maxw, ctx.eAbs, alphaMin, alphaMax, beta);
     
-    // 步骤 4：以 Wep 为权重跑 Floyd，生成初始 Gc
-    ctx.gcInitial = step4BuildInitialGc(ctx.eSet, ctx.vc);
+    // 步骤 4：以 Wep 为权重跑 Floyd，生成 gc 和初始 gcInitial
+    step4BuildInitialGc(ctx);
     
     // 步骤 5：检查初始 Gc 是否满足跳数约束
     QMap<QPair<quint32, quint32>, quint32> gcHopMap = buildHopMatrix(ctx.gcInitial);

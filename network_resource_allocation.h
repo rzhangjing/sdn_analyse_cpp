@@ -38,7 +38,9 @@ struct NetworkEdge {
     double hsEG;
     /// Wep：链路加权成本 = We × hs_e_G
     double weightedCost;
-    
+    // 最短路径
+    QVector<quint32> paths;
+
     NetworkEdge() 
         : source(0), target(0), bandwidth(0.0), bec(0.0), 
           delayMs(0.0), weight(0.0), hsEG(0.0), weightedCost(0.0) {}
@@ -83,7 +85,7 @@ struct EecnBuild {
     // 图构建过程数据
     // ----------------------------------------------------------------
     /// 原始图 G
-     Graph g;
+    Graph g;
     /// FloydWarshallResult
     FloydWarshallResult floydWarshallRes;
     /// V：所有节点集合（去重后的全部顶点）
@@ -100,7 +102,13 @@ struct EecnBuild {
     double maxw;
     /// hG_vi_vj：G 上所有节点对的最短跳数矩阵
     QMap<QPair<quint32, quint32>, quint32> gHopMap;
-    /// 步骤5 生成的初始 Gc
+    /// 生成的Eecn图
+    Graph gc;
+    /// 所有边缘服务器对最短路径上的边
+    QSet<QPair<quint32, quint32>> gcSet;
+    // 节点对快速查找表
+    QMap<QPair<quint32, quint32>, NetworkEdge> edgeMap;
+    /// 生成的初始 Gc
     QVector<NetworkEdge> gcInitial;
     /// 初始 Gc 中不满足跳数约束的服务器对数量
     int hopViolations;
