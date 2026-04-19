@@ -22,39 +22,19 @@ QVector<quint32> FloydWarshallResult::path(quint32 source, quint32 target) const
         return {};
     }
 
-    // 检查路径是否存在
-    QMap<QPair<quint32, quint32>, double>::const_iterator distIt = m_distances.find(qMakePair(source, target));
-    if (distIt == m_distances.end() ||
-        distIt.value() == std::numeric_limits<double>::infinity()) {
-        return {};
-    }
-
     // 相同节点
     if (source == target) {
         return {source};
     }
 
-    // 通过 next_hop 重建路径
-    QVector<quint32> result;
-    quint32 current = source;
-    result.append(current);
-
-    while (current != target) {
-        QMap<QPair<quint32, quint32>, quint32>::const_iterator nextIt = m_nextHop.find(qMakePair(current, target));
-        if (nextIt == m_nextHop.end()) {
-            // 路径断裂
-            return {};
-        }
-        current = nextIt.value();
-        result.append(current);
-
-        // 防止循环（理论上 Floyd-Warshall 结果中不应存在）
-        if (result.size() > static_cast<int>(m_nodes.size()) + 1) {
-            return {};
-        }
+    // 从缓存中获取路径
+    QMap<QPair<quint32, quint32>, QVector<quint32>>::const_iterator it = m_paths.find(qMakePair(source, target));
+    if (it != m_paths.end()) {
+        return it.value();
     }
 
-    return result;
+    // 缓存中不存在，表示不可达
+    return {};
 }
 
 QVector<std::tuple<quint32, quint32, double>> FloydWarshallResult::allDistances() const
@@ -143,20 +123,42 @@ bool floydWarshall(const Graph &graph, FloydWarshallResult &result, QString *err
 
     // 将矩阵结果转换回节点 ID 映射
     QMap<QPair<quint32, quint32>, double> distances;
-    QMap<QPair<quint32, quint32>, quint32> nextHop;
 
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             quint32 u = nodeList[i];
             quint32 v = nodeList[j];
             distances[qMakePair(u, v)] = dist[i][j];
-            if (nextNode[i][j] >= 0) {
-                nextHop[qMakePair(u, v)] = nodeList[nextNode[i][j]];
-            }
         }
     }
 
     QVector<quint32> nodes(nodeList.begin(), nodeList.end());
-    result = FloydWarshallResult(distances, nextHop, nodes);
+
+    // 预计算所有节点对的最短路径并缓存
+    QMap<QPair<quint32, quint32>, QVector<quint32>> paths;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (i == j) continue;
+            if (dist[i][j] == INF) continue;
+            if (nextNode[i][j] < 0) continue;
+
+            quint32 src = nodeList[i];
+            quint32 tgt = nodeList[j];
+            QVector<quint32> p;
+            int cur = i;
+            p.append(nodeList[cur]);
+            while (cur != j) {
+                cur = nextNode[cur][j];
+                if (cur < 0) { p.clear(); break; }
+                p.append(nodeList[cur]);
+                if (p.size() > n + 1) { p.clear(); break; }
+            }
+            if (!p.isEmpty()) {
+                paths.insert(qMakePair(src, tgt), p);
+            }
+        }
+    }
+
+    result = FloydWarshallResult(distances, nodes, paths);
     return true;
 }

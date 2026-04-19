@@ -156,7 +156,6 @@ static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
 // ---------------------------------------------------------------------------
 // 步骤 3 辅助：l_value 计算
 // ---------------------------------------------------------------------------
-
 static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, int eAbs) {
     double hf = static_cast<double>(h);
     if (hf < alphaMin) {
@@ -198,7 +197,6 @@ static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
 // ---------------------------------------------------------------------------
 // 步骤 3 辅助：找到 mcn
 // ---------------------------------------------------------------------------
-
 static quint32 findMcn(const NetworkEdge& e, quint32 ci, quint32 cj,
                        const FloydWarshallResult& delayFw,
                        const QMap<QPair<quint32, quint32>, quint32>& hopMap) {
@@ -258,7 +256,6 @@ static double computeYG(const NetworkEdge& e, quint32 ci, quint32 cj,
 // ---------------------------------------------------------------------------
 // 步骤 3 辅助：计算单条链路的 hs_e_G
 // ---------------------------------------------------------------------------
-
 static double computeHsForEdge(const NetworkEdge& e, const QVector<quint32>& vc,
                                const FloydWarshallResult& delayFw,
                                const QMap<QPair<quint32, quint32>, quint32>& hopMap,
@@ -281,7 +278,6 @@ static double computeHsForEdge(const NetworkEdge& e, const QVector<quint32>& vc,
 // ---------------------------------------------------------------------------
 // 步骤 3：计算每条链路的 hs_e_G 和 Wep
 // ---------------------------------------------------------------------------
-
 static void step3ComputeWep(QVector<NetworkEdge>& edges, const QVector<quint32>& vc,
                             const FloydWarshallResult& delayFw,
                             const QMap<QPair<quint32, quint32>, quint32>& hopMap,
