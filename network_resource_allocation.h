@@ -6,6 +6,7 @@
 #include <QPair>
 #include <QString>
 #include <QTextStream>
+#include <QSharedPointer>
 #include <optional>
 #include <functional>
 #include "floyd_warshall.h"
@@ -56,7 +57,7 @@ struct EecnGraph {
     /// Vc：边缘服务器节点集合
     QVector<quint32> servers;
     /// Gc 中保留的链路集合 Ec（包含完整链路信息）
-    QVector<NetworkEdge> edges;
+    QVector<QSharedPointer<NetworkEdge>> edges;
     /// cost_Gc：Gc 的网络成本（Ec 中所有链路成本权重 We 之和）
     double costGc;
     /// E_abs：原始图 G 的链路总条数
@@ -91,7 +92,7 @@ struct EecnBuild {
     /// V：所有节点集合（去重后的全部顶点）
     QVector<quint32> v;
     /// E：原始图 G 的全部链路（含完整 NetworkEdge 信息）
-    QVector<NetworkEdge> eSet;
+    QVector<QSharedPointer<NetworkEdge>> eSet;
     /// E_abs：E 的总条数
     int eAbs;
     /// Vc：边缘服务器节点集合
@@ -107,9 +108,9 @@ struct EecnBuild {
     /// 所有边缘服务器对最短路径上的边
     QSet<QPair<quint32, quint32>> gcSet;
     // 节点对快速查找表
-    QMap<QPair<quint32, quint32>, NetworkEdge> edgeMap;
+    QMap<QPair<quint32, quint32>, QSharedPointer<NetworkEdge>> edgeMap;
     /// 生成的初始 Gc
-    QVector<NetworkEdge> gcInitial;
+    QVector<QSharedPointer<NetworkEdge>> gcInitial;
     /// 初始 Gc 中不满足跳数约束的服务器对数量
     int hopViolations;
     
