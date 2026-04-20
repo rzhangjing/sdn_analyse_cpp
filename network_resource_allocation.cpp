@@ -468,12 +468,10 @@ std::optional<EecnBuild> eecnGraphBuild(
     
     // 步骤 2c：构建以延迟为权重的原始图 G，并缓存 Floyd-Warshall 结果
     ctx.g = buildGraph(ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
-    {
-        QString fwErr;
-        if (!floydWarshall(ctx.g, ctx.floydWarshallRes, &fwErr)) {
-            qDebug() << "构建延迟矩阵失败：" << fwErr;
-            return std::nullopt;
-        }
+    QString fwErr;
+    if (!floydWarshall(ctx.g, ctx.floydWarshallRes, &fwErr)) {
+        qDebug() << "构建延迟矩阵失败：" << fwErr;
+        return std::nullopt;
     }
     
     // 步骤 2c+：为每条边计算最短路径

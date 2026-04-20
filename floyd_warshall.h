@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QMap>
+#include <QHash>
 #include <QVector>
 #include <QPair>
 #include <QString>
@@ -12,13 +12,13 @@ class FloydWarshallResult {
 public:
     FloydWarshallResult() : m_valid(false) {}
 
-    FloydWarshallResult(const QMap<QPair<quint32, quint32>, double> &distances,
-                        const QVector<quint32> &nodes,
-                        const QMap<QPair<quint32, quint32>, QVector<quint32>> &paths)
+    FloydWarshallResult(QHash<QPair<quint32, quint32>, double> &&distances,
+                        QVector<quint32> &&nodes,
+                        QHash<QPair<quint32, quint32>, QVector<quint32>> &&paths)
         : m_valid(true)
-        , m_distances(distances)
-        , m_nodes(nodes)
-        , m_paths(paths)
+        , m_distances(std::move(distances))
+        , m_nodes(std::move(nodes))
+        , m_paths(std::move(paths))
     {}
 
     bool isValid() const { return m_valid; }
@@ -36,12 +36,12 @@ public:
     QVector<quint32> nodeList() const;
 
     // 返回所有预计算的最短路径
-    const QMap<QPair<quint32, quint32>, QVector<quint32>> &allPaths() const { return m_paths; }
+    const QHash<QPair<quint32, quint32>, QVector<quint32>> &allPaths() const { return m_paths; }
 
 private:
     bool m_valid;
-    QMap<QPair<quint32, quint32>, double> m_distances;
-    QMap<QPair<quint32, quint32>, QVector<quint32>> m_paths; // 最短路径 QMap<QPair<起点, 终点>, QVector<路径>>
+    QHash<QPair<quint32, quint32>, double> m_distances;
+    QHash<QPair<quint32, quint32>, QVector<quint32>> m_paths; // 最短路径 QHash<QPair<起点, 终点>, QVector<路径>>
     QVector<quint32> m_nodes;
 };
 
