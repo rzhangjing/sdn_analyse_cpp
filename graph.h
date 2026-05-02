@@ -51,9 +51,11 @@ public:
     void initDistAndNextNode();
     // 计算 Floyd-Warshall 全源最短路径并缓存结果
     bool computeFloydWarshall(QString *errorMsg = nullptr);
-
     // 是否有有效的 Floyd-Warshall 缓存结果
     bool hasFloydWarshallResult() const;
+
+    // 计算跳数矩阵
+    void buildHopMatrix();
 
     // 返回 source -> target 的最短距离，无路径时返回 infinity
     double distance(quint32 source, quint32 target) const;
@@ -84,6 +86,8 @@ public:
     }
 
 private:
+    // 节点列表
+    QVector<quint32> m_nodes;
     // 所有节点对的有效状态，键为 packNodePair(source, target)
     QMap<quint64, bool> m_edgeValidMap;
     // 邻接表：节点 -> {邻居 -> (权重, 带宽)}
@@ -96,8 +100,8 @@ private:
     QHash<quint64, double> m_floydDistances;
     // 所有节点对的最短路径，键为 packNodePair(source, target)
     QHash<quint64, QVector<quint32>> m_floydPaths;
-    // Floyd-Warshall 计算时的节点列表
-    QVector<quint32> m_floydNodes;
+    /// 有节点对的的最短跳数矩阵，键为 packNodePair(source, target)
+    QMap<quint64, quint32> m_hopMap;
 
     // Floyd-Warshall 算法中的节点位置索引
     QHash<quint32, int> m_nodeIndex;

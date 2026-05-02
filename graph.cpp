@@ -8,6 +8,7 @@ void Graph::addNode(quint32 node)
     if (!m_adjacencyList.contains(node))
     {
         m_adjacencyList.insert(node, QMap<quint32, std::tuple<double, double>>());
+        m_nodes.append(node);
     }
 }
 
@@ -91,11 +92,16 @@ bool Graph::isEmpty() const
 
 void Graph::clear()
 {
+    m_nodes.clear();
+    m_edgeValidMap.clear();
     m_adjacencyList.clear();
     m_floydValid = false;
     m_floydDistances.clear();
     m_floydPaths.clear();
-    m_floydNodes.clear();
+    m_hopMap.clear();
+    m_nodeIndex.clear();
+    m_dist.clear();
+    m_nextNode.clear();
 }
 
 // 初始化 Floyd-Warshall 算法使用的节点索引、距离矩阵和后继节点矩阵
@@ -117,7 +123,9 @@ void Graph::initDistAndNextNode()
 
 bool Graph::computeFloydWarshall(QString *errorMsg)
 {
+     m_hopMap.clear();
     if (m_nodeIndex.size() <= 0) { initDistAndNextNode(); }
+
     if (isEmpty())
     {
         if (errorMsg) *errorMsg = QStringLiteral("Graph is empty");
@@ -199,7 +207,6 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
         }
     }
 
-    m_floydNodes = QVector<quint32>(nl.begin(), nl.end());
     m_floydPaths.clear();
     m_floydPaths.reserve(n * n);
     for (int i = 0; i < n; ++i)
@@ -234,12 +241,33 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
 #undef IDX
 
     m_floydValid = true;
+    // 计算跳数矩阵
+    buildHopMatrix();
+
     return true;
 }
 
 bool Graph::hasFloydWarshallResult() const
 {
     return m_floydValid;
+}
+
+// 计算跳数矩阵
+void Graph::buildHopMatrix()
+{
+    m_hopMap.clear();
+    for (quint32 source : m_nodes)
+    {
+        for (quint32 target : m_nodes)
+        {
+            if (source == target) continue;
+            auto it = m_floydPaths.find(Graph::packNodePair(source, target));
+            if (it != m_floydPaths.end())
+            {
+                m_hopMap.insert(Graph::packNodePair(source, target), static_cast<quint32>((*it).size() - 1));
+            }
+        }
+    }
 }
 
 double Graph::distance(quint32 source, quint32 target) const
@@ -292,7 +320,7 @@ QVector<std::tuple<quint32, quint32, double>> Graph::allDistances() const
 
 QVector<quint32> Graph::nodeList() const
 {
-    return m_floydNodes;
+    return m_nodes;
 }
 
 const QHash<quint64, QVector<quint32>> &Graph::allPaths() const
