@@ -21,6 +21,9 @@ public:
     bool addEdge(quint32 source, quint32 target, double weight, double bandWidth,
                  QString *errorMsg = nullptr);
 
+    // 设置节点对直接边的有效性
+    void setEdgeValid(quint32 source, quint32 target, bool status);
+
     // 从边列表构造图；出错返回 false 并设置 errorMsg
     static bool fromEdges(const QVector<Edge> &edges, Graph &outGraph,
                           QString *errorMsg = nullptr);
@@ -44,6 +47,8 @@ public:
     // 清空图的所有数据
     void clear();
 
+    // 初始化Floyd-Warshall 算法使用的距离和后继节点矩阵
+    void initDistAndNextNode();
     // 计算 Floyd-Warshall 全源最短路径并缓存结果
     bool computeFloydWarshall(QString *errorMsg = nullptr);
 
@@ -79,6 +84,8 @@ public:
     }
 
 private:
+    // 所有节点对的有效状态，键为 packNodePair(source, target)
+    QMap<quint64, bool> m_edgeValidMap;
     // 邻接表：节点 -> {邻居 -> (权重, 带宽)}
     QMap<quint32, QMap<quint32, std::tuple<double, double>>> m_adjacencyList;
 
@@ -91,4 +98,11 @@ private:
     QHash<quint64, QVector<quint32>> m_floydPaths;
     // Floyd-Warshall 计算时的节点列表
     QVector<quint32> m_floydNodes;
+
+    // Floyd-Warshall 算法中的节点位置索引
+    QHash<quint32, int> m_nodeIndex;
+    // Floyd-Warshall 算法中的最短距离矩阵
+    QVector<double> m_dist;
+    // Floyd-Warshall 算法中的后继节点矩阵
+    QVector<int> m_nextNode;
 };

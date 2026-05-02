@@ -26,7 +26,23 @@ bool Graph::addEdge(quint32 source, quint32 target, double weight, double bandWi
     addNode(source);
     addNode(target);
     m_adjacencyList[source][target] = std::make_tuple(weight, bandWidth);
+    m_edgeValidMap.insert(packNodePair(source, target), true);
     return true;
+}
+
+// 设置节点对直接边的有效性
+void Graph::setEdgeValid(quint32 source, quint32 target, bool status)
+{
+    quint64 firstPairVal = packNodePair(source, target);
+    if (m_edgeValidMap.contains(firstPairVal))
+    {
+        m_edgeValidMap[firstPairVal] = status;
+    }
+    quint64 secondPairVal = packNodePair(source, target);
+    if (m_edgeValidMap.contains(secondPairVal))
+    {
+        m_edgeValidMap[secondPairVal] = status;
+    }
 }
 
 bool Graph::fromEdges(const QVector<Edge> &edges, Graph &outGraph, QString *errorMsg)
@@ -82,34 +98,45 @@ void Graph::clear()
     m_floydNodes.clear();
 }
 
+// 初始化 Floyd-Warshall 算法使用的节点索引、距离矩阵和后继节点矩阵
+void Graph::initDistAndNextNode()
+{
+    QList<quint32> nl = nodes();
+    const int n = nl.size();
+
+    m_nodeIndex.clear();
+    m_nodeIndex.reserve(n);
+    for (int i = 0; i < n; ++i)
+    {
+        m_nodeIndex[nl[i]] = i;
+    }
+    const double INF = std::numeric_limits<double>::infinity();
+    m_dist = QVector<double>(static_cast<size_t>(n) * n, INF);
+    m_nextNode = QVector<int>(static_cast<size_t>(n) * n, -1);
+}
+
 bool Graph::computeFloydWarshall(QString *errorMsg)
 {
+    if (m_nodeIndex.size() <= 0) { initDistAndNextNode(); }
     if (isEmpty())
     {
         if (errorMsg) *errorMsg = QStringLiteral("Graph is empty");
         return false;
     }
 
-    const double INF = std::numeric_limits<double>::infinity();
-
     QList<quint32> nl = nodes();
     const int n = nl.size();
+    const double INF = std::numeric_limits<double>::infinity();
 
-    QHash<quint32, int> nodeIndex;
-    nodeIndex.reserve(n);
-    for (int i = 0; i < n; ++i)
-    {
-        nodeIndex[nl[i]] = i;
-    }
-
-    std::vector<double> dist(static_cast<size_t>(n) * n, INF);
-    std::vector<int> nextNode(static_cast<size_t>(n) * n, -1);
+    // 初始化 m_dist 为无穷大，m_nextNode 为 -1
+    m_dist = QVector<double>(static_cast<size_t>(n) * n, INF);
+    m_nextNode = QVector<int>(static_cast<size_t>(n) * n, -1);
 
 #define IDX(i, j) (static_cast<size_t>(i) * n + (j))
 
     for (int i = 0; i < n; ++i)
     {
-        dist[IDX(i, i)] = 0.0;
+        m_dist[IDX(i, i)] = 0.0;
     }
 
     for (int i = 0; i < n; ++i)
@@ -122,18 +149,18 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
             quint32 v = it.key();
             double w = std::get<0>(it.value());
             double bw = std::get<1>(it.value());
-            QHash<quint32, int>::const_iterator nit = nodeIndex.constFind(v);
-            if (nit == nodeIndex.cend()) continue;
+            QHash<quint32, int>::const_iterator nit = m_nodeIndex.constFind(v);
+            if (nit == m_nodeIndex.cend()) continue;
             int j = nit.value();
-            if (w < dist[IDX(i, j)])
+            if (w < m_dist[IDX(i, j)])
             {
-                dist[IDX(i, j)] = w;
-                nextNode[IDX(i, j)] = j;
+                m_dist[IDX(i, j)] = w;
+                m_nextNode[IDX(i, j)] = j;
             }
-            if (w < dist[IDX(j, i)])
+            if (w < m_dist[IDX(j, i)])
             {
-                dist[IDX(j, i)] = w;
-                nextNode[IDX(j, i)] = i;
+                m_dist[IDX(j, i)] = w;
+                m_nextNode[IDX(j, i)] = i;
             }
         }
     }
@@ -142,19 +169,19 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
     {
         for (int i = 0; i < n; ++i)
         {
-            double dik = dist[IDX(i, k)];
+            double dik = m_dist[IDX(i, k)];
             if (dik == INF) continue;
             const size_t rowI = static_cast<size_t>(i) * n;
             const size_t rowK = static_cast<size_t>(k) * n;
             for (int j = 0; j < n; ++j)
             {
-                double dkj = dist[rowK + j];
+                double dkj = m_dist[rowK + j];
                 if (dkj == INF) continue;
                 double newDist = dik + dkj;
-                if (newDist < dist[rowI + j])
+                if (newDist < m_dist[rowI + j])
                 {
-                    dist[rowI + j] = newDist;
-                    nextNode[rowI + j] = nextNode[IDX(i, k)];
+                    m_dist[rowI + j] = newDist;
+                    m_nextNode[rowI + j] = m_nextNode[IDX(i, k)];
                 }
             }
         }
@@ -168,7 +195,7 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
         const size_t rowI = static_cast<size_t>(i) * n;
         for (int j = 0; j < n; ++j)
         {
-            m_floydDistances.insert(Graph::packNodePair(u, nl[j]), dist[rowI + j]);
+            m_floydDistances.insert(Graph::packNodePair(u, nl[j]), m_dist[rowI + j]);
         }
     }
 
@@ -181,8 +208,8 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
         for (int j = 0; j < n; ++j)
         {
             if (i == j) continue;
-            if (dist[rowI + j] == INF) continue;
-            if (nextNode[rowI + j] < 0) continue;
+            if (m_dist[rowI + j] == INF) continue;
+            if (m_nextNode[rowI + j] < 0) continue;
 
             quint32 src = nl[i];
             quint32 tgt = nl[j];
@@ -192,7 +219,7 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
             p.append(nl[cur]);
             while (cur != j)
             {
-                cur = nextNode[static_cast<size_t>(cur) * n + j];
+                cur = m_nextNode[static_cast<size_t>(cur) * n + j];
                 if (cur < 0) { p.clear(); break; }
                 p.append(nl[cur]);
                 if (p.size() > n + 1) { p.clear(); break; }
