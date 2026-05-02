@@ -63,3 +63,8 @@ bool Graph::isEmpty() const
 {
     return m_adjacencyList.isEmpty();
 }
+
+void Graph::clear()
+{
+    m_adjacencyList.clear();
+}

@@ -71,22 +71,25 @@ static QMap<QPair<quint32, quint32>, quint32> buildHopMatrix(const QVector<QShar
 }
 
 /// 构建以 `weightFn` 提取边权重的图
-static Graph buildGraph(const QVector<QSharedPointer<NetworkEdge>>& edges, 
+static void buildGraph(Graph& g,
+                        const QVector<QSharedPointer<NetworkEdge>>& edges,
                         std::function<double(const QSharedPointer<NetworkEdge>&)> weightFn) {
-    Graph g;
-    for (const QSharedPointer<NetworkEdge>& e : edges) {
+    g.clear();
+    for (const QSharedPointer<NetworkEdge>& e : edges)
+    {
         double w = weightFn(e);
-        if (w >= 0.0) {
+        if (w >= 0.0)
+        {
             QString err;
             g.addEdge(e->source, e->target, w, e->bandwidth, &err);
         }
     }
-    return g;
 }
 
 /// 构建以延迟为权重的 Floyd 结果
 static std::optional<FloydWarshallResult> buildDelayFw(const QVector<QSharedPointer<NetworkEdge>>& edges) {
-    Graph g = buildGraph(edges, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
+    Graph g;
+    buildGraph(g, edges, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
     FloydWarshallResult fw;
     QString err;
     if (floydWarshall(g, fw, &err)) {
@@ -294,8 +297,8 @@ static void step3ComputeWep(QVector<QSharedPointer<NetworkEdge>>& edges, const Q
 // ---------------------------------------------------------------------------
 static void step4BuildInitialGc(EecnBuild& ctx) {
     // 构建以 Wep 为权重的图
-    ctx.gc = buildGraph(ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { 
-        return qMax(e->weightedCost, 0.0); 
+    buildGraph(ctx.gc, ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) {
+        return qMax(e->weightedCost, 0.0);
     });
     
     FloydWarshallResult wepFw;
@@ -449,7 +452,8 @@ std::optional<EecnBuild> eecnGraphBuild(
     
     // 步骤 1：读取文件
     QString err;
-    if (!step1LoadEdges(filePath, ctx.eSet, err)) {
+    if (!step1LoadEdges(filePath, ctx.eSet, err))
+    {
         qDebug().noquote() << err;
         return std::nullopt;
     }
@@ -462,14 +466,16 @@ std::optional<EecnBuild> eecnGraphBuild(
     
     // 步骤 2b：计算 maxw
     ctx.maxw = 0.0;
-    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet) {
+    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet)
+    {
         ctx.maxw = qMax(ctx.maxw, e->weight);
     }
     
     // 步骤 2c：构建以延迟为权重的原始图 G，并缓存 Floyd-Warshall 结果
-    ctx.g = buildGraph(ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
+    buildGraph(ctx.g, ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
     QString fwErr;
-    if (!floydWarshall(ctx.g, ctx.floydWarshallRes, &fwErr)) {
+    if (!floydWarshall(ctx.g, ctx.floydWarshallRes, &fwErr))
+    {
         qDebug() << "构建延迟矩阵失败：" << fwErr;
         return std::nullopt;
     }
@@ -569,20 +575,20 @@ static void networkAllocationFile(const QString& csvFile) {
     networkAllocationPara(csvFile, logStream, 20,  1.0, 5.0, 1.4);
     networkAllocationPara(csvFile, logStream, 20,  1.0, 5.0, 1.3);
 
-    networkAllocationPara(csvFile, logStream, 40,  1.0, 7.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.4);
-    networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.3);
+    //networkAllocationPara(csvFile, logStream, 40,  1.0, 7.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.4);
+    //networkAllocationPara(csvFile, logStream, 40,  1.0, 5.0, 1.3);
 
-    networkAllocationPara(csvFile, logStream, 60,  1.0, 7.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.4);
-    networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.3);
+    //networkAllocationPara(csvFile, logStream, 60,  1.0, 7.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.4);
+    //networkAllocationPara(csvFile, logStream, 60,  1.0, 5.0, 1.3);
 
-    networkAllocationPara(csvFile, logStream, 80,  1.0, 7.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.2);
-    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.4);
-    networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.3);
+    //networkAllocationPara(csvFile, logStream, 80,  1.0, 7.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.2);
+    //networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.4);
+    //networkAllocationPara(csvFile, logStream, 80,  1.0, 5.0, 1.3);
 
     logFile.close();
 }

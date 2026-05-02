@@ -30,6 +30,9 @@ public:
     QList<quint32> nodes() const;
     bool isEmpty() const;
 
+    // 清空图的所有数据
+    void clear();
+
 private:
     // 邻接表：节点 -> [(邻居, 权重, 带宽)]
     QMap<quint32, QVector<std::tuple<quint32, double, double>>> m_adjacencyList;
