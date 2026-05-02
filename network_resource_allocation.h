@@ -101,14 +101,14 @@ struct EecnBuild {
     double mina;
     /// MAXW：E 中最大的链路成本权重 We
     double maxw;
-    /// hG_vi_vj：G 上所有节点对的最短跳数矩阵
-    QMap<QPair<quint32, quint32>, quint32> gHopMap;
+    /// hG_vi_vj：G 上所有节点对的最短跳数矩阵，键为 Graph::packNodePair(source, target)
+    QMap<quint64, quint32> gHopMap;
     /// 生成的Eecn图
     Graph gc;
-    /// 所有边缘服务器对最短路径上的边
-    QSet<QPair<quint32, quint32>> gcSet;
-    // 节点对快速查找表
-    QMap<QPair<quint32, quint32>, QSharedPointer<NetworkEdge>> edgeMap;
+    /// 所有边缘服务器对最短路径上的边，键为 Graph::packNodePair(source, target)
+    QSet<quint64> gcSet;
+    // 节点对快速查找表，键为 Graph::packNodePair(source, target)
+    QMap<quint64, QSharedPointer<NetworkEdge>> edgeMap;
     /// 生成的初始 Gc
     QVector<QSharedPointer<NetworkEdge>> gcInitial;
     /// 初始 Gc 中不满足跳数约束的服务器对数量
