@@ -1,5 +1,8 @@
 #include "graph.h"
 
+#include <limits>
+#include <vector>
+
 void Graph::addNode(quint32 node)
 {
     if (!m_adjacencyList.contains(node)) {
@@ -67,4 +70,172 @@ bool Graph::isEmpty() const
 void Graph::clear()
 {
     m_adjacencyList.clear();
+    m_floydValid = false;
+    m_floydDistances.clear();
+    m_floydPaths.clear();
+    m_floydNodes.clear();
+}
+
+bool Graph::computeFloydWarshall(QString *errorMsg)
+{
+    if (isEmpty()) {
+        if (errorMsg) *errorMsg = QStringLiteral("Graph is empty");
+        return false;
+    }
+
+    const double INF = std::numeric_limits<double>::infinity();
+
+    QList<quint32> nl = nodes();
+    const int n = nl.size();
+
+    QHash<quint32, int> nodeIndex;
+    nodeIndex.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        nodeIndex[nl[i]] = i;
+    }
+
+    std::vector<double> dist(static_cast<size_t>(n) * n, INF);
+    std::vector<int> nextNode(static_cast<size_t>(n) * n, -1);
+
+#define IDX(i, j) (static_cast<size_t>(i) * n + (j))
+
+    for (int i = 0; i < n; ++i) {
+        dist[IDX(i, i)] = 0.0;
+    }
+
+    for (int i = 0; i < n; ++i) {
+        quint32 u = nl[i];
+        const QVector<std::tuple<quint32, double, double>> *nbrs = neighbors(u);
+        if (!nbrs) continue;
+        for (const auto &[v, w, bw] : *nbrs) {
+            QHash<quint32, int>::const_iterator it = nodeIndex.constFind(v);
+            if (it == nodeIndex.cend()) continue;
+            int j = it.value();
+            if (w < dist[IDX(i, j)]) {
+                dist[IDX(i, j)] = w;
+                nextNode[IDX(i, j)] = j;
+            }
+            if (w < dist[IDX(j, i)]) {
+                dist[IDX(j, i)] = w;
+                nextNode[IDX(j, i)] = i;
+            }
+        }
+    }
+
+    for (int k = 0; k < n; ++k) {
+        for (int i = 0; i < n; ++i) {
+            double dik = dist[IDX(i, k)];
+            if (dik == INF) continue;
+            const size_t rowI = static_cast<size_t>(i) * n;
+            const size_t rowK = static_cast<size_t>(k) * n;
+            for (int j = 0; j < n; ++j) {
+                double dkj = dist[rowK + j];
+                if (dkj == INF) continue;
+                double newDist = dik + dkj;
+                if (newDist < dist[rowI + j]) {
+                    dist[rowI + j] = newDist;
+                    nextNode[rowI + j] = nextNode[IDX(i, k)];
+                }
+            }
+        }
+    }
+
+    m_floydDistances.clear();
+    m_floydDistances.reserve(n * n);
+    for (int i = 0; i < n; ++i) {
+        quint32 u = nl[i];
+        const size_t rowI = static_cast<size_t>(i) * n;
+        for (int j = 0; j < n; ++j) {
+            m_floydDistances.insert(qMakePair(u, nl[j]), dist[rowI + j]);
+        }
+    }
+
+    m_floydNodes = QVector<quint32>(nl.begin(), nl.end());
+
+    m_floydPaths.clear();
+    m_floydPaths.reserve(n * n);
+    for (int i = 0; i < n; ++i) {
+        const size_t rowI = static_cast<size_t>(i) * n;
+        for (int j = 0; j < n; ++j) {
+            if (i == j) continue;
+            if (dist[rowI + j] == INF) continue;
+            if (nextNode[rowI + j] < 0) continue;
+
+            quint32 src = nl[i];
+            quint32 tgt = nl[j];
+            QVector<quint32> p;
+            p.reserve(n);
+            int cur = i;
+            p.append(nl[cur]);
+            while (cur != j) {
+                cur = nextNode[static_cast<size_t>(cur) * n + j];
+                if (cur < 0) { p.clear(); break; }
+                p.append(nl[cur]);
+                if (p.size() > n + 1) { p.clear(); break; }
+            }
+            if (!p.isEmpty()) {
+                m_floydPaths.insert(qMakePair(src, tgt), std::move(p));
+            }
+        }
+    }
+
+#undef IDX
+
+    m_floydValid = true;
+    return true;
+}
+
+bool Graph::hasFloydWarshallResult() const
+{
+    return m_floydValid;
+}
+
+double Graph::distance(quint32 source, quint32 target) const
+{
+    if (!m_floydValid) {
+        return std::numeric_limits<double>::infinity();
+    }
+    auto it = m_floydDistances.find(qMakePair(source, target));
+    if (it == m_floydDistances.end()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    return it.value();
+}
+
+QVector<quint32> Graph::path(quint32 source, quint32 target) const
+{
+    if (!m_floydValid) {
+        return {};
+    }
+    if (source == target) {
+        return {source};
+    }
+    auto it = m_floydPaths.find(qMakePair(source, target));
+    if (it != m_floydPaths.end()) {
+        return it.value();
+    }
+    return {};
+}
+
+QVector<std::tuple<quint32, quint32, double>> Graph::allDistances() const
+{
+    QVector<std::tuple<quint32, quint32, double>> result;
+    if (!m_floydValid) {
+        return result;
+    }
+    result.reserve(m_floydDistances.size());
+    for (auto it = m_floydDistances.cbegin(); it != m_floydDistances.cend(); ++it) {
+        result.append(std::make_tuple(it.key().first, it.key().second, it.value()));
+    }
+    return result;
+}
+
+QVector<quint32> Graph::nodeList() const
+{
+    return m_floydNodes;
+}
+
+const QHash<QPair<quint32, quint32>, QVector<quint32>> &Graph::allPaths() const
+{
+    return m_floydPaths;
 }

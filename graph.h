@@ -3,6 +3,8 @@
 #include <QMap>
 #include <QVector>
 #include <QList>
+#include <QHash>
+#include <QPair>
 #include <QString>
 #include <tuple>
 #include "edge.h"
@@ -33,7 +35,34 @@ public:
     // 清空图的所有数据
     void clear();
 
+    // 计算 Floyd-Warshall 全源最短路径并缓存结果
+    bool computeFloydWarshall(QString *errorMsg = nullptr);
+
+    // 是否有有效的 Floyd-Warshall 缓存结果
+    bool hasFloydWarshallResult() const;
+
+    // 返回 source -> target 的最短距离，无路径时返回 infinity
+    double distance(quint32 source, quint32 target) const;
+
+    // 从缓存中获取 source -> target 的最短路径，不可达时返回空 QVector
+    QVector<quint32> path(quint32 source, quint32 target) const;
+
+    // 返回所有节点对的 (source, target, distance) 列表
+    QVector<std::tuple<quint32, quint32, double>> allDistances() const;
+
+    // 返回图中所有节点列表（Floyd-Warshall 计算时的节点顺序）
+    QVector<quint32> nodeList() const;
+
+    // 返回所有预计算的最短路径
+    const QHash<QPair<quint32, quint32>, QVector<quint32>> &allPaths() const;
+
 private:
     // 邻接表：节点 -> [(邻居, 权重, 带宽)]
     QMap<quint32, QVector<std::tuple<quint32, double, double>>> m_adjacencyList;
+
+    // Floyd-Warshall 缓存结果
+    bool m_floydValid = false;
+    QHash<QPair<quint32, quint32>, double> m_floydDistances;
+    QHash<QPair<quint32, quint32>, QVector<quint32>> m_floydPaths;
+    QVector<quint32> m_floydNodes;
 };
