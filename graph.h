@@ -56,6 +56,8 @@ public:
 
     // 计算跳数矩阵
     void buildHopMatrix();
+    // 获取跳数矩阵
+    const QMap<quint64, quint32>& getHopMatrix();
 
     // 返回 source -> target 的最短距离，无路径时返回 infinity
     double distance(quint32 source, quint32 target) const;

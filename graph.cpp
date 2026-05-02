@@ -270,6 +270,12 @@ void Graph::buildHopMatrix()
     }
 }
 
+// 获取跳数矩阵
+const QMap<quint64, quint32>& Graph::getHopMatrix()
+{
+    return m_hopMap;
+}
+
 double Graph::distance(quint32 source, quint32 target) const
 {
     if (!m_floydValid)
