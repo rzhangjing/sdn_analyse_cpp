@@ -52,15 +52,18 @@ bool dijkstra(const Graph &graph, quint32 source,
     const double INF = std::numeric_limits<double>::infinity();
 
     // 构建无向邻接表：将所有边的反向也加入
-    QMap<quint32, QVector<std::tuple<quint32, double, double>>> undirectedAdj;
+    QMap<quint32, QMap<quint32, std::tuple<double, double>>> undirectedAdj;
     for (quint32 node : graph.nodes()) {
-        const QVector<std::tuple<quint32, double, double>> *nbrs = graph.neighbors(node);
+        const QMap<quint32, std::tuple<double, double>> *nbrs = graph.neighbors(node);
         if (nbrs) {
-            for (const auto &[v, w, bw] : *nbrs) {
+            for (auto it = nbrs->cbegin(); it != nbrs->cend(); ++it) {
+                quint32 v = it.key();
+                double w = std::get<0>(it.value());
+                double bw = std::get<1>(it.value());
                 // 添加正向边 node -> v
-                undirectedAdj[node].append(std::make_tuple(v, w, bw));
+                undirectedAdj[node][v] = std::make_tuple(w, bw);
                 // 添加反向边 v -> node
-                undirectedAdj[v].append(std::make_tuple(node, w, bw));
+                undirectedAdj[v][node] = std::make_tuple(w, bw);
             }
         }
     }
@@ -91,7 +94,7 @@ bool dijkstra(const Graph &graph, quint32 source,
         }
         visited.insert(u);
 
-        const QVector<std::tuple<quint32, double, double>> *nbrs = nullptr;
+        const QMap<quint32, std::tuple<double, double>> *nbrs = nullptr;
         auto it = undirectedAdj.find(u);
         if (it != undirectedAdj.end()) {
             nbrs = &it.value();
@@ -100,7 +103,10 @@ bool dijkstra(const Graph &graph, quint32 source,
             continue;
         }
 
-        for (const auto &[v, w, bw] : *nbrs) {
+        for (auto it = nbrs->cbegin(); it != nbrs->cend(); ++it) {
+            quint32 v = it.key();
+            double w = std::get<0>(it.value());
+            double bw = std::get<1>(it.value());
             if (visited.contains(v)) {
                 continue;
             }

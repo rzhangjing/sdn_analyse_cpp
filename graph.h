@@ -9,7 +9,8 @@
 #include <tuple>
 #include "edge.h"
 
-class Graph {
+class Graph 
+{
 public:
     Graph() = default;
 
@@ -25,7 +26,8 @@ public:
                           QString *errorMsg = nullptr);
 
     // 获取邻居列表指针，节点不存在返回 nullptr
-    const QVector<std::tuple<quint32, double, double>> *neighbors(quint32 node) const;
+    // 内层 QMap 键为邻居节点，值为 (weight, bandwidth) tuple
+    const QMap<quint32, std::tuple<double, double>> *neighbors(quint32 node) const;
 
     bool containsNode(quint32 node) const;
     int nodeCount() const;
@@ -57,8 +59,8 @@ public:
     const QHash<QPair<quint32, quint32>, QVector<quint32>> &allPaths() const;
 
 private:
-    // 邻接表：节点 -> [(邻居, 权重, 带宽)]
-    QMap<quint32, QVector<std::tuple<quint32, double, double>>> m_adjacencyList;
+    // 邻接表：节点 -> {邻居 -> (权重, 带宽)}
+    QMap<quint32, QMap<quint32, std::tuple<double, double>>> m_adjacencyList;
 
     // Floyd-Warshall 缓存结果
     bool m_floydValid = false;

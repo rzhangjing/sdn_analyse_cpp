@@ -6,7 +6,7 @@
 void Graph::addNode(quint32 node)
 {
     if (!m_adjacencyList.contains(node)) {
-        m_adjacencyList.insert(node, QVector<std::tuple<quint32, double, double>>());
+        m_adjacencyList.insert(node, QMap<quint32, std::tuple<double, double>>());
     }
 }
 
@@ -22,7 +22,7 @@ bool Graph::addEdge(quint32 source, quint32 target, double weight, double bandWi
 
     addNode(source);
     addNode(target);
-    m_adjacencyList[source].append(std::make_tuple(target, weight, bandWidth));
+    m_adjacencyList[source][target] = std::make_tuple(weight, bandWidth);
     return true;
 }
 
@@ -38,9 +38,9 @@ bool Graph::fromEdges(const QVector<Edge> &edges, Graph &outGraph, QString *erro
     return true;
 }
 
-const QVector<std::tuple<quint32, double, double>> *Graph::neighbors(quint32 node) const
+const QMap<quint32, std::tuple<double, double>> *Graph::neighbors(quint32 node) const
 {
-    QMap<quint32, QVector<std::tuple<quint32, double, double>>>::const_iterator it = m_adjacencyList.find(node);
+    QMap<quint32, QMap<quint32, std::tuple<double, double>>>::const_iterator it = m_adjacencyList.find(node);
     if (it == m_adjacencyList.end()) {
         return nullptr;
     }
@@ -105,12 +105,15 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
 
     for (int i = 0; i < n; ++i) {
         quint32 u = nl[i];
-        const QVector<std::tuple<quint32, double, double>> *nbrs = neighbors(u);
+        const QMap<quint32, std::tuple<double, double>> *nbrs = neighbors(u);
         if (!nbrs) continue;
-        for (const auto &[v, w, bw] : *nbrs) {
-            QHash<quint32, int>::const_iterator it = nodeIndex.constFind(v);
-            if (it == nodeIndex.cend()) continue;
-            int j = it.value();
+        for (auto it = nbrs->cbegin(); it != nbrs->cend(); ++it) {
+            quint32 v = it.key();
+            double w = std::get<0>(it.value());
+            double bw = std::get<1>(it.value());
+            QHash<quint32, int>::const_iterator nit = nodeIndex.constFind(v);
+            if (nit == nodeIndex.cend()) continue;
+            int j = nit.value();
             if (w < dist[IDX(i, j)]) {
                 dist[IDX(i, j)] = w;
                 nextNode[IDX(i, j)] = j;
