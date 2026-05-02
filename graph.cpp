@@ -5,7 +5,8 @@
 
 void Graph::addNode(quint32 node)
 {
-    if (!m_adjacencyList.contains(node)) {
+    if (!m_adjacencyList.contains(node))
+    {
         m_adjacencyList.insert(node, QMap<quint32, std::tuple<double, double>>());
     }
 }
@@ -13,8 +14,10 @@ void Graph::addNode(quint32 node)
 bool Graph::addEdge(quint32 source, quint32 target, double weight, double bandWidth,
                     QString *errorMsg)
 {
-    if (weight < 0.0) {
-        if (errorMsg) {
+    if (weight < 0.0)
+    {
+        if (errorMsg)
+        {
             *errorMsg = QStringLiteral("Edge weight cannot be negative");
         }
         return false;
@@ -29,8 +32,10 @@ bool Graph::addEdge(quint32 source, quint32 target, double weight, double bandWi
 bool Graph::fromEdges(const QVector<Edge> &edges, Graph &outGraph, QString *errorMsg)
 {
     Graph g;
-    for (const Edge &e : edges) {
-        if (!g.addEdge(e.source, e.target, e.weight, e.bandWidth, errorMsg)) {
+    for (const Edge &e : edges)
+    {
+        if (!g.addEdge(e.source, e.target, e.weight, e.bandWidth, errorMsg))
+        {
             return false;
         }
     }
@@ -41,7 +46,8 @@ bool Graph::fromEdges(const QVector<Edge> &edges, Graph &outGraph, QString *erro
 const QMap<quint32, std::tuple<double, double>> *Graph::neighbors(quint32 node) const
 {
     QMap<quint32, QMap<quint32, std::tuple<double, double>>>::const_iterator it = m_adjacencyList.find(node);
-    if (it == m_adjacencyList.end()) {
+    if (it == m_adjacencyList.end())
+    {
         return nullptr;
     }
     return &it.value();
@@ -78,7 +84,8 @@ void Graph::clear()
 
 bool Graph::computeFloydWarshall(QString *errorMsg)
 {
-    if (isEmpty()) {
+    if (isEmpty())
+    {
         if (errorMsg) *errorMsg = QStringLiteral("Graph is empty");
         return false;
     }
@@ -90,7 +97,8 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
 
     QHash<quint32, int> nodeIndex;
     nodeIndex.reserve(n);
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i)
+    {
         nodeIndex[nl[i]] = i;
     }
 
@@ -99,43 +107,52 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
 
 #define IDX(i, j) (static_cast<size_t>(i) * n + (j))
 
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i)
+    {
         dist[IDX(i, i)] = 0.0;
     }
 
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i)
+    {
         quint32 u = nl[i];
         const QMap<quint32, std::tuple<double, double>> *nbrs = neighbors(u);
         if (!nbrs) continue;
-        for (auto it = nbrs->cbegin(); it != nbrs->cend(); ++it) {
+        for (auto it = nbrs->cbegin(); it != nbrs->cend(); ++it)
+        {
             quint32 v = it.key();
             double w = std::get<0>(it.value());
             double bw = std::get<1>(it.value());
             QHash<quint32, int>::const_iterator nit = nodeIndex.constFind(v);
             if (nit == nodeIndex.cend()) continue;
             int j = nit.value();
-            if (w < dist[IDX(i, j)]) {
+            if (w < dist[IDX(i, j)])
+            {
                 dist[IDX(i, j)] = w;
                 nextNode[IDX(i, j)] = j;
             }
-            if (w < dist[IDX(j, i)]) {
+            if (w < dist[IDX(j, i)])
+            {
                 dist[IDX(j, i)] = w;
                 nextNode[IDX(j, i)] = i;
             }
         }
     }
 
-    for (int k = 0; k < n; ++k) {
-        for (int i = 0; i < n; ++i) {
+    for (int k = 0; k < n; ++k)
+    {
+        for (int i = 0; i < n; ++i)
+        {
             double dik = dist[IDX(i, k)];
             if (dik == INF) continue;
             const size_t rowI = static_cast<size_t>(i) * n;
             const size_t rowK = static_cast<size_t>(k) * n;
-            for (int j = 0; j < n; ++j) {
+            for (int j = 0; j < n; ++j)
+            {
                 double dkj = dist[rowK + j];
                 if (dkj == INF) continue;
                 double newDist = dik + dkj;
-                if (newDist < dist[rowI + j]) {
+                if (newDist < dist[rowI + j])
+                {
                     dist[rowI + j] = newDist;
                     nextNode[rowI + j] = nextNode[IDX(i, k)];
                 }
@@ -145,21 +162,24 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
 
     m_floydDistances.clear();
     m_floydDistances.reserve(n * n);
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i)
+    {
         quint32 u = nl[i];
         const size_t rowI = static_cast<size_t>(i) * n;
-        for (int j = 0; j < n; ++j) {
-            m_floydDistances.insert(qMakePair(u, nl[j]), dist[rowI + j]);
+        for (int j = 0; j < n; ++j)
+        {
+            m_floydDistances.insert(Graph::packNodePair(u, nl[j]), dist[rowI + j]);
         }
     }
 
     m_floydNodes = QVector<quint32>(nl.begin(), nl.end());
-
     m_floydPaths.clear();
     m_floydPaths.reserve(n * n);
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i)
+    {
         const size_t rowI = static_cast<size_t>(i) * n;
-        for (int j = 0; j < n; ++j) {
+        for (int j = 0; j < n; ++j)
+        {
             if (i == j) continue;
             if (dist[rowI + j] == INF) continue;
             if (nextNode[rowI + j] < 0) continue;
@@ -170,14 +190,16 @@ bool Graph::computeFloydWarshall(QString *errorMsg)
             p.reserve(n);
             int cur = i;
             p.append(nl[cur]);
-            while (cur != j) {
+            while (cur != j)
+            {
                 cur = nextNode[static_cast<size_t>(cur) * n + j];
                 if (cur < 0) { p.clear(); break; }
                 p.append(nl[cur]);
                 if (p.size() > n + 1) { p.clear(); break; }
             }
-            if (!p.isEmpty()) {
-                m_floydPaths.insert(qMakePair(src, tgt), std::move(p));
+            if (!p.isEmpty())
+            {
+                m_floydPaths.insert(Graph::packNodePair(src, tgt), std::move(p));
             }
         }
     }
@@ -195,11 +217,13 @@ bool Graph::hasFloydWarshallResult() const
 
 double Graph::distance(quint32 source, quint32 target) const
 {
-    if (!m_floydValid) {
+    if (!m_floydValid)
+    {
         return std::numeric_limits<double>::infinity();
     }
-    auto it = m_floydDistances.find(qMakePair(source, target));
-    if (it == m_floydDistances.end()) {
+    auto it = m_floydDistances.find(Graph::packNodePair(source, target));
+    if (it == m_floydDistances.end())
+    {
         return std::numeric_limits<double>::infinity();
     }
     return it.value();
@@ -207,14 +231,17 @@ double Graph::distance(quint32 source, quint32 target) const
 
 QVector<quint32> Graph::path(quint32 source, quint32 target) const
 {
-    if (!m_floydValid) {
+    if (!m_floydValid)
+    {
         return {};
     }
-    if (source == target) {
+    if (source == target)
+    {
         return {source};
     }
-    auto it = m_floydPaths.find(qMakePair(source, target));
-    if (it != m_floydPaths.end()) {
+    auto it = m_floydPaths.find(Graph::packNodePair(source, target));
+    if (it != m_floydPaths.end())
+    {
         return it.value();
     }
     return {};
@@ -223,12 +250,15 @@ QVector<quint32> Graph::path(quint32 source, quint32 target) const
 QVector<std::tuple<quint32, quint32, double>> Graph::allDistances() const
 {
     QVector<std::tuple<quint32, quint32, double>> result;
-    if (!m_floydValid) {
+    if (!m_floydValid)
+    {
         return result;
     }
     result.reserve(m_floydDistances.size());
-    for (auto it = m_floydDistances.cbegin(); it != m_floydDistances.cend(); ++it) {
-        result.append(std::make_tuple(it.key().first, it.key().second, it.value()));
+    for (auto it = m_floydDistances.cbegin(); it != m_floydDistances.cend(); ++it)
+    {
+        auto pair = Graph::unpackNodePair(it.key());
+        result.append(std::make_tuple(pair.first, pair.second, it.value()));
     }
     return result;
 }
@@ -238,7 +268,7 @@ QVector<quint32> Graph::nodeList() const
     return m_floydNodes;
 }
 
-const QHash<QPair<quint32, quint32>, QVector<quint32>> &Graph::allPaths() const
+const QHash<quint64, QVector<quint32>> &Graph::allPaths() const
 {
     return m_floydPaths;
 }
