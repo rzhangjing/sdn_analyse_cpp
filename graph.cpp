@@ -31,6 +31,43 @@ bool Graph::addEdge(quint32 source, quint32 target, double weight, double bandWi
     return true;
 }
 
+// 移除有向边
+void Graph::removeEdge(quint32 source, quint32 target)
+{
+    if (m_adjacencyList.contains(source))
+    {
+        QMap<quint32, std::tuple<double, double>> dataMap = m_adjacencyList[source];
+        if (dataMap.contains(target))
+        {
+            dataMap.remove(target);
+        }
+    }
+    // 移除边
+    removeNetworkEdge(source, target);
+}
+
+// 更新图的权重
+void Graph::updateEdge(quint32 source, quint32 target, double weight, double bandWidth)
+{
+    //
+    if (m_adjacencyList.contains(source))
+    {
+        QMap<quint32, std::tuple<double, double>> dataMap = m_adjacencyList[source];
+        if (dataMap.contains(target))
+        {
+            dataMap[target] = std::make_tuple(weight, bandWidth);
+        }
+    }
+    if (m_adjacencyList.contains(target))
+    {
+        QMap<quint32, std::tuple<double, double>> dataMap = m_adjacencyList[target];
+        if (dataMap.contains(source))
+        {
+            dataMap[source] = std::make_tuple(weight, bandWidth);
+        }
+    }
+}
+
 // 设置节点对直接边的有效性
 void Graph::setEdgeValid(quint32 source, quint32 target, bool status)
 {
@@ -39,7 +76,7 @@ void Graph::setEdgeValid(quint32 source, quint32 target, bool status)
     {
         m_edgeValidMap[firstPairVal] = status;
     }
-    quint64 secondPairVal = packNodePair(source, target);
+    quint64 secondPairVal = packNodePair(target, source);
     if (m_edgeValidMap.contains(secondPairVal))
     {
         m_edgeValidMap[secondPairVal] = status;
@@ -102,6 +139,56 @@ void Graph::clear()
     m_nodeIndex.clear();
     m_dist.clear();
     m_nextNode.clear();
+    m_edgeMap.clear();
+}
+
+// 添加一条NetworkEdge
+void Graph::addNetworkEdge(const QSharedPointer<NetworkEdge>& edge)
+{
+    if (!edge)
+    {
+        m_edgeMap.insert(packNodePair(edge->source, edge->target), edge);
+        m_edgeMap.insert(packNodePair(edge->target, edge->source), edge);
+    }
+}
+
+// 移除一条NetworkEdge
+void Graph::removeNetworkEdge(quint32 source, quint32 target)
+{
+    quint64 pairVal1 = packNodePair(source, target);
+    m_edgeMap.remove(pairVal1);
+    quint64 pairVal2 = packNodePair(target, source);
+    m_edgeMap.remove(pairVal2);
+}
+
+// 存在一条NetworkEdge
+bool Graph::hasNetworkEdge(quint32 source, quint32 target)
+{
+    quint64 pairVal = packNodePair(source, target);
+    if (m_edgeMap.contains(pairVal))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+// 获取一条NetworkEdge
+QSharedPointer<NetworkEdge> Graph::getNetworkEdge(quint32 source, quint32 target)
+{
+    quint64 pairVal = packNodePair(source, target);
+    if (m_edgeMap.contains(pairVal))
+    {
+        return m_edgeMap[pairVal];
+    }
+
+    return nullptr;
+}
+
+// 清理NetworkEdge
+void Graph::clearNetworkEdge()
+{
+    m_edgeMap.clear();
 }
 
 // 初始化 Floyd-Warshall 算法使用的节点索引、距离矩阵和后继节点矩阵
@@ -121,14 +208,15 @@ void Graph::initDistAndNextNode()
     m_nextNode = QVector<int>(static_cast<size_t>(n) * n, -1);
 }
 
-bool Graph::computeFloydWarshall(QString *errorMsg)
+bool Graph::computeFloydWarshall(QString& errorMsg)
 {
+    errorMsg.clear();
      m_hopMap.clear();
     if (m_nodeIndex.size() <= 0) { initDistAndNextNode(); }
 
     if (isEmpty())
     {
-        if (errorMsg) *errorMsg = QStringLiteral("Graph is empty");
+        errorMsg = QStringLiteral("Graph is empty");
         return false;
     }
 
@@ -271,7 +359,7 @@ void Graph::buildHopMatrix()
 }
 
 // 获取跳数矩阵
-const QMap<quint64, quint32>& Graph::getHopMatrix()
+const QMap<quint64, quint32>& Graph::getHopMatrix() const
 {
     return m_hopMap;
 }

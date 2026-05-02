@@ -15,58 +15,10 @@
 
 namespace network_resource_allocation {
 
-void teeWriteln(QTextStream& logStream, const QString& msg) {
+void teeWriteln(QTextStream& logStream, const QString& msg)
+{
     qDebug().noquote() << msg;
     logStream << msg << Qt::endl;
-}
-
-// ---------------------------------------------------------------------------
-// 辅助函数：构建跳数矩阵
-// ---------------------------------------------------------------------------
-/// 用 Floyd-Warshall 重建 source -> target 的路径,计算跳数
-static QMap<quint64, quint32> buildHopMatrix(Graph& graph) {
-    QMap<quint64, quint32> result;
-
-    QVector<quint32> nodes = graph.nodeList();
-    for (quint32 src : nodes) {
-        for (quint32 tgt : nodes) {
-            if (src == tgt) continue;
-            QVector<quint32> p = graph.path(src, tgt);
-            if (!p.isEmpty() && p.size() > 1) {
-                result.insert(Graph::packNodePair(src, tgt), static_cast<quint32>(p.size() - 1));
-            }
-        }
-    }
-
-    return result;
-}
-
-/// 以每条有向边跳数 = 1 为权重，用 Floyd-Warshall 计算所有节点对最短跳数矩阵
-static QMap<quint64, quint32> buildHopMatrix(const QVector<QSharedPointer<NetworkEdge>>& edges) {
-    QMap<quint64, quint32> result;
-
-    // 构建图，每条边权重 = 1
-    Graph g;
-    for (const QSharedPointer<NetworkEdge>& e : edges) {
-        QString err;
-        g.addEdge(e->source, e->target, 1.0, e->bandwidth, &err);
-    }
-
-    // 执行 Floyd-Warshall
-    QString err;
-    if (!g.computeFloydWarshall(&err)) {
-        return result;
-    }
-
-    // 转换为跳数矩阵
-    auto allDist = g.allDistances();
-    for (const auto& [src, tgt, dist] : allDist) {
-        if (qIsFinite(dist) && dist > 0.0) {
-            result.insert(Graph::packNodePair(src, tgt), static_cast<quint32>(qRound(dist)));
-        }
-    }
-
-    return result;
 }
 
 /// 构建以 `weightFn` 提取边权重的图
@@ -81,26 +33,16 @@ static void buildGraph(Graph& g,
         {
             QString err;
             g.addEdge(e->source, e->target, w, e->bandwidth, &err);
+            g.addNetworkEdge(e);
         }
     }
-}
-
-/// 构建以延迟为权重的 Floyd 结果
-static std::optional<Graph> buildDelayFw(const QVector<QSharedPointer<NetworkEdge>>& edges) {
-    Graph g;
-    buildGraph(g, edges, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
-    QString err;
-    if (g.computeFloydWarshall(&err)) {
-        return g;
-    }
-    return std::nullopt;
 }
 
 // ---------------------------------------------------------------------------
 // 步骤 1：读取文件
 // ---------------------------------------------------------------------------
-
-static bool step1LoadEdges(const QString& filePath, QVector<QSharedPointer<NetworkEdge>>& edges, QString& errorMsg) {
+static bool step1LoadEdges(const QString& filePath, EecnBuild& eecnBuild, QString& errorMsg)
+{
     auto [success, rawEdges] = read_netdata::readGraph(filePath, &errorMsg);
     if (!success) {
         errorMsg = QString("读取图文件失败 [%1]: %2").arg(filePath).arg(errorMsg);
@@ -112,8 +54,10 @@ static bool step1LoadEdges(const QString& filePath, QVector<QSharedPointer<Netwo
     }
     
     // Edge::weight = delay(ms)，Edge::bandWidth = bandwidth(Gbps)
-    for (const Edge& e : rawEdges) {
-        edges.append(QSharedPointer<NetworkEdge>::create(e.source, e.target, e.bandWidth, e.weight));
+    for (const Edge& e : rawEdges)
+    {
+        QSharedPointer<NetworkEdge> edge = QSharedPointer<NetworkEdge>::create(e.source, e.target, e.bandWidth, e.weight);
+        eecnBuild.eSet.append(edge);
     }
     return true;
 }
@@ -122,16 +66,19 @@ static bool step1LoadEdges(const QString& filePath, QVector<QSharedPointer<Netwo
 // 步骤 2：收集顶点集 V，随机选取边缘服务器 Vc
 // ---------------------------------------------------------------------------
 static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
-    const QVector<QSharedPointer<NetworkEdge>>& edges, int num) {
+    const QVector<QSharedPointer<NetworkEdge>>& edges, int num)
+{
     
     QSet<quint32> nodeSet;
-    for (const QSharedPointer<NetworkEdge>& e : edges) {
+    for (const QSharedPointer<NetworkEdge>& e : edges)
+    {
         nodeSet.insert(e->source);
         nodeSet.insert(e->target);
     }
     
     QVector<quint32> v;
-    for (quint32 node : nodeSet) {
+    for (quint32 node : nodeSet)
+    {
         v.append(node);
     }
     std::sort(v.begin(), v.end());
@@ -141,13 +88,15 @@ static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
     
     // Fisher-Yates shuffle
     QRandomGenerator* rng = QRandomGenerator::global();
-    for (int i = shuffled.size() - 1; i > 0; --i) {
+    for (int i = shuffled.size() - 1; i > 0; --i)
+    {
         int j = rng->bounded(0, i + 1);
         qSwap(shuffled[i], shuffled[j]);
     }
     
     QVector<quint32> vc;
-    for (int i = 0; i < pick; ++i) {
+    for (int i = 0; i < pick; ++i)
+    {
         vc.append(shuffled[i]);
     }
     
@@ -157,13 +106,19 @@ static QPair<QVector<quint32>, QVector<quint32>> step2CollectVerticesAndServers(
 // ---------------------------------------------------------------------------
 // 步骤 3 辅助：l_value 计算
 // ---------------------------------------------------------------------------
-static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, int eAbs) {
+static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, int eAbs)
+{
     double hf = static_cast<double>(h);
-    if (hf < alphaMin) {
+    if (hf < alphaMin)
+    {
         return 1.0;
-    } else if (hf > alphaMax) {
+    }
+    else if (hf > alphaMax)
+    {
         return static_cast<double>(eAbs);
-    } else {
+    }
+    else
+    {
         return beta;
     }
 }
@@ -172,7 +127,8 @@ static double lValue(quint32 h, double alphaMin, double alphaMax, double beta, i
 // 步骤 3 辅助：判断链路是否在最短路径上
 // ---------------------------------------------------------------------------
 static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
-                             const Graph& delayGraph) {
+                             const Graph& delayGraph)
+{
     double dCiCj = delayGraph.distance(ci, cj);
     if (qIsInf(dCiCj)) return false;
 
@@ -180,7 +136,8 @@ static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
     double dCiSrc = delayGraph.distance(ci, e.source);
     double dTgtCj = delayGraph.distance(e.target, cj);
     if (qIsFinite(dCiSrc) && qIsFinite(dTgtCj) &&
-        qAbs(dCiSrc + e.weight + dTgtCj - dCiCj) < 1e-9) {
+        qAbs(dCiSrc + e.weight + dTgtCj - dCiCj) < 1e-9)
+    {
         return true;
     }
 
@@ -188,7 +145,8 @@ static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
     double dCiTgt = delayGraph.distance(ci, e.target);
     double dSrcCj = delayGraph.distance(e.source, cj);
     if (qIsFinite(dCiTgt) && qIsFinite(dSrcCj) &&
-        qAbs(dCiTgt + e.weight + dSrcCj - dCiCj) < 1e-9) {
+        qAbs(dCiTgt + e.weight + dSrcCj - dCiCj) < 1e-9)
+    {
         return true;
     }
 
@@ -199,19 +157,22 @@ static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
 // 步骤 3 辅助：找到 mcn
 // ---------------------------------------------------------------------------
 static quint32 findMcn(const NetworkEdge& e, quint32 ci, quint32 cj,
-                       const Graph& delayGraph,
-                       const QMap<quint64, quint32>& hopMap) {
+                       const Graph& delayGraph)
+{
     QVector<quint32> path = delayGraph.path(ci, cj);
-    if (path.isEmpty()) {
+    if (path.isEmpty())
+    {
         return ci;
     }
 
     quint32 bestNode = ci;
     quint32 bestHops = std::numeric_limits<quint32>::max();
 
-    for (quint32 node : path) {
-        quint32 h = hopMap.value(Graph::packNodePair(node, e.target), std::numeric_limits<quint32>::max());
-        if (h < bestHops) {
+    for (quint32 node : path)
+    {
+        quint32 h = delayGraph.m_hopMap.value(Graph::packNodePair(node, e.target), std::numeric_limits<quint32>::max());
+        if (h < bestHops)
+        {
             bestHops = h;
             bestNode = node;
         }
@@ -226,29 +187,31 @@ static quint32 findMcn(const NetworkEdge& e, quint32 ci, quint32 cj,
 
 static double computeYG(const NetworkEdge& e, quint32 ci, quint32 cj,
                         const Graph& delayGraph,
-                        const QMap<quint64, quint32>& hopMap,
                         double mina, double maxw, int eAbs,
-                        double alphaMin, double alphaMax, double beta) {
+                        double alphaMin, double alphaMax, double beta)
+{
     // IG_e_ci_cj：e 是否在 G 上 Ci→Cj 最短路径（按延迟）上
-    if (isOnShortestPath(e, ci, cj, delayGraph)) {
+    if (isOnShortestPath(e, ci, cj, delayGraph))
+    {
         return mina;
     }
 
     // IGp_e_ci_cj：lG_ci_cj == E_abs（即 h > alpha_max）
-    quint32 hCiCj = hopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
+    quint32 hCiCj = delayGraph.m_hopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
     double lVal = lValue(hCiCj, alphaMin, alphaMax, beta, eAbs);
-    if (qAbs(lVal - static_cast<double>(eAbs)) < 1e-9) {
+    if (qAbs(lVal - static_cast<double>(eAbs)) < 1e-9)
+    {
         return maxw * qPow(static_cast<double>(eAbs), 2);
     }
 
     // 否则：dGh / dGv
-    quint32 mcn = findMcn(e, ci, cj, delayGraph, hopMap);
-    double dgV = static_cast<double>(hopMap.value(Graph::packNodePair(e.source, mcn), 0));
-    double hCiMcn = static_cast<double>(hopMap.value(Graph::packNodePair(ci, mcn), std::numeric_limits<quint32>::max()));
-    double hCjMcn = static_cast<double>(hopMap.value(Graph::packNodePair(cj, mcn), std::numeric_limits<quint32>::max()));
+    quint32 mcn = findMcn(e, ci, cj, delayGraph);
+    double dgV = static_cast<double>(delayGraph.m_hopMap.value(Graph::packNodePair(e.source, mcn), 0));
+    double hCiMcn = static_cast<double>(delayGraph.m_hopMap.value(Graph::packNodePair(ci, mcn), std::numeric_limits<quint32>::max()));
+    double hCjMcn = static_cast<double>(delayGraph.m_hopMap.value(Graph::packNodePair(cj, mcn), std::numeric_limits<quint32>::max()));
     double dgH = qMin(hCiMcn, hCjMcn);
-
-    if (dgV == 0.0) {
+    if (dgV == 0.0)
+    {
         return mina;
     }
     return dgH / dgV;
@@ -259,17 +222,18 @@ static double computeYG(const NetworkEdge& e, quint32 ci, quint32 cj,
 // ---------------------------------------------------------------------------
 static double computeHsForEdge(const NetworkEdge& e, const QVector<quint32>& vc,
                                const Graph& delayGraph,
-                               const QMap<quint64, quint32>& hopMap,
                                double mina, double maxw, int eAbs,
                                double alphaMin, double alphaMax, double beta) {
     double total = 0.0;
 
-    for (int i = 0; i < vc.size(); ++i) {
-        for (int j = 0; j < vc.size(); ++j) {
+    for (int i = 0; i < vc.size(); ++i)
+    {
+        for (int j = 0; j < vc.size(); ++j)
+        {
             if (i == j) continue;
             quint32 ci = vc[i];
             quint32 cj = vc[j];
-            total += computeYG(e, ci, cj, delayGraph, hopMap, mina, maxw, eAbs, alphaMin, alphaMax, beta);
+            total += computeYG(e, ci, cj, delayGraph, mina, maxw, eAbs, alphaMin, alphaMax, beta);
         }
     }
 
@@ -281,11 +245,12 @@ static double computeHsForEdge(const NetworkEdge& e, const QVector<quint32>& vc,
 // ---------------------------------------------------------------------------
 static void step3ComputeWep(QVector<QSharedPointer<NetworkEdge>>& edges, const QVector<quint32>& vc,
                             const Graph& delayGraph,
-                            const QMap<quint64, quint32>& hopMap,
                             double mina, double maxw, int eAbs,
-                            double alphaMin, double alphaMax, double beta) {
-    for (const QSharedPointer<NetworkEdge>& e : edges) {
-        e->hsEG = computeHsForEdge(*e, vc, delayGraph, hopMap, mina, maxw, eAbs, alphaMin, alphaMax, beta);
+                            double alphaMin, double alphaMax, double beta)
+{
+    for (const QSharedPointer<NetworkEdge>& e : edges)
+    {
+        e->hsEG = computeHsForEdge(*e, vc, delayGraph, mina, maxw, eAbs, alphaMin, alphaMax, beta);
         e->weightedCost = e->weight * e->hsEG;
     }
 }
@@ -293,66 +258,75 @@ static void step3ComputeWep(QVector<QSharedPointer<NetworkEdge>>& edges, const Q
 // ---------------------------------------------------------------------------
 // 步骤 4：构建初始 Gc
 // ---------------------------------------------------------------------------
-static void step4BuildInitialGc(EecnBuild& ctx) {
-    // 构建以 Wep 为权重的图
-    buildGraph(ctx.gc, ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) {
-        return qMax(e->weightedCost, 0.0);
-    });
-    
+static void step4BuildInitialGc(EecnBuild& ctx)
+{
     QString err;
-    if (!ctx.gc.computeFloydWarshall(&err)) {
+    // 构建以 Wep 为权重的图
+    buildGraph(ctx.gc, ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { return qMax(e->weightedCost, 0.0); });
+    if (!ctx.gc.computeFloydWarshall(err))
+    {
         ctx.gcInitial.clear();
         return;
     }
 
-    // 收集所有服务器对最短路径上的边
-    ctx.gcSet.clear();
-    for (quint32 ci : ctx.vc) {
-        for (quint32 cj : ctx.vc) {
+    // 所有边缘服务器对最短路径上的边，键为 Graph::packNodePair(source, target)
+    QSet<quint64> gcSet;
+    for (quint32 ci : ctx.vc)
+    {
+        for (quint32 cj : ctx.vc)
+        {
             if (ci == cj) continue;
 
             QVector<quint32> path = ctx.gc.path(ci, cj);
-            for (int i = 0; i < path.size() - 1; ++i) {
-                ctx.gcSet.insert(Graph::packNodePair(path[i], path[i + 1]));
+            for (int i = 0; i < path.size() - 1; ++i)
+            {
+                gcSet.insert(Graph::packNodePair(path[i], path[i + 1]));
             }
         }
     }
 
-    // 按 (source, target) 和 (target, source) 建立快速查找表（无向图双向映射）
-    ctx.edgeMap.clear();
-    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet) {
-        ctx.edgeMap.insert(Graph::packNodePair(e->source, e->target), e);
-        ctx.edgeMap.insert(Graph::packNodePair(e->target, e->source), e);
-    }
-
     ctx.gcInitial.clear();
-    for (const auto& key : ctx.gcSet) {
-        if (ctx.edgeMap.contains(key)) {
-            ctx.gcInitial.append(ctx.edgeMap[key]);
+    for (const auto& key : gcSet)
+    {
+        QPair<quint32, quint32> pairVal =Graph::unpackNodePair(key);
+        if (ctx.gc.hasNetworkEdge(pairVal.first, pairVal.second))
+        {
+            ctx.gcInitial.append(ctx.gc.getNetworkEdge(pairVal.first, pairVal.second));
         }
+    }
+    // 重新构建Gc
+    buildGraph(ctx.gc, ctx.gcInitial, [](const QSharedPointer<NetworkEdge>& e) { return qMax(e->weightedCost, 0.0); });
+    if (!ctx.gc.computeFloydWarshall(err))
+    {
+        ctx.gcInitial.clear();
+        return;
     }
 }
 
 // ---------------------------------------------------------------------------
 // 步骤 5：检查跳数约束
 // ---------------------------------------------------------------------------
-static int countViolations(const QMap<quint64, quint32>& gcHopMap,
-                           const QMap<quint64, quint32>& gHopMap,
-                           const QVector<quint32>& vc,
-                           double alphaMin, double alphaMax, double beta, int eAbs) {
+static int countViolations(EecnBuild& ctx,
+                           const QMap<quint64, quint32>& newHopMap,
+                           const QMap<quint64, quint32>& oldHopMap,
+                           double alphaMin, double alphaMax, double beta, int eAbs)
+{
     int violations = 0;
 
-    for (quint32 ci : vc) {
-        for (quint32 cj : vc) {
+    for (quint32 ci : ctx.vc)
+    {
+        for (quint32 cj : ctx.vc)
+        {
             if (ci == cj) continue;
 
-            quint32 hG = gHopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
-            quint32 hGc = gcHopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
+            quint32 hG = oldHopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
+            quint32 hGc = newHopMap.value(Graph::packNodePair(ci, cj), std::numeric_limits<quint32>::max());
 
             double limit = lValue(hG, alphaMin, alphaMax, beta, eAbs);
             quint32 threshold = static_cast<quint32>(qRound(limit * static_cast<double>(hG)));
 
-            if (hGc > threshold) {
+            if (hGc > threshold)
+            {
                 ++violations;
             }
         }
@@ -364,73 +338,89 @@ static int countViolations(const QMap<quint64, quint32>& gcHopMap,
 // ---------------------------------------------------------------------------
 // 步骤 6：剪枝算法
 // ---------------------------------------------------------------------------
-static void tryRemoveEdges(QVector<QSharedPointer<NetworkEdge>>& gc, const QVector<QSharedPointer<NetworkEdge>>& candidates,
-                           const QVector<quint32>& vc,
-                           const QMap<quint64, quint32>& gHopMap,
+static void tryRemoveEdges(EecnBuild& ctx, QVector<QSharedPointer<NetworkEdge>>& gc, const QVector<QSharedPointer<NetworkEdge>>& candidates,
                            double alphaMin, double alphaMax, double beta, int eAbs,
-                           int& currentViolations) {
-    for (const QSharedPointer<NetworkEdge>& candidate : candidates) {
+                           int& currentViolations)
+{
+    QString errorMsg;
+    for (const QSharedPointer<NetworkEdge>& candidate : candidates)
+    {
         // 尝试从 gc 中找到该边并移除
         int pos = -1;
-        for (int i = 0; i < gc.size(); ++i) {
-            if (gc[i]->source == candidate->source && gc[i]->target == candidate->target) {
+        for (int i = 0; i < gc.size(); ++i)
+        {
+            if (gc[i]->source == candidate->source && gc[i]->target == candidate->target)
+            {
                 pos = i;
                 break;
             }
         }
 
-        if (pos >= 0) {
+        if (pos >= 0)
+        {
             QSharedPointer<NetworkEdge> removed = gc.takeAt(pos);
-            QMap<quint64, quint32> newHm = buildHopMatrix(gc);
-            int newViolations = countViolations(newHm, gHopMap, vc, alphaMin, alphaMax, beta, eAbs);
+            QString msg = QString("正在裁剪: %1-%2\n").arg(removed->source).arg(removed->target);
+            qDebug() << msg;
+
+            Graph graphTmp = ctx.gc;
+            graphTmp.removeEdge(removed->source, removed->target);
+            graphTmp.removeEdge(removed->target, removed->source);
+            graphTmp.computeFloydWarshall(errorMsg);
+            int newViolations = countViolations(ctx, graphTmp.m_hopMap, ctx.g.m_hopMap, alphaMin, alphaMax, beta, eAbs);
             if (newViolations > currentViolations)
             {
                 // 恢复
                 gc.append(removed);
             }
+            else
+            {
+                // 更新gc
+                ctx.gc = graphTmp;
+            }
         }
     }
 }
 
-static QVector<QSharedPointer<NetworkEdge>> step6Prune(const QVector<QSharedPointer<NetworkEdge>>& gcInitial,
-                                       const QVector<QSharedPointer<NetworkEdge>>& allEdges,
-                                       const QVector<quint32>& vc,
-                                       const QMap<quint64, quint32>& gHopMap,
-                                       double alphaMin, double alphaMax, double beta, int eAbs) {
+static QVector<QSharedPointer<NetworkEdge>> step6Prune(EecnBuild& ctx,
+                                       double alphaMin, double alphaMax, double beta, int eAbs)
+{
     // 初始 Gc = G 中所有链路
-    QVector<QSharedPointer<NetworkEdge>> gc = allEdges;
+    QVector<QSharedPointer<NetworkEdge>> gc = ctx.eSet;
 
     // A：G 中但不在初始 Gc 中的链路
     QSet<quint64> gcInitialSet;
-    for (const QSharedPointer<NetworkEdge>& e : gcInitial) {
+    for (const QSharedPointer<NetworkEdge>& e : ctx.gcInitial)
+    {
         gcInitialSet.insert(Graph::packNodePair(e->source, e->target));
     }
 
     QVector<QSharedPointer<NetworkEdge>> a;
-    for (const QSharedPointer<NetworkEdge>& e : allEdges) {
-        if (!gcInitialSet.contains(Graph::packNodePair(e->source, e->target))) {
+    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet)
+    {
+        if (!gcInitialSet.contains(Graph::packNodePair(e->source, e->target)))
+        {
             a.append(e);
         }
     }
 
     // B：初始 Gc 中的链路
-    QVector<QSharedPointer<NetworkEdge>> b = gcInitial;
+    QVector<QSharedPointer<NetworkEdge>> b = ctx.gcInitial;
 
     // 按 hs_e_G 降序排序
-    auto sortByHsEG = [](const QSharedPointer<NetworkEdge>& x, const QSharedPointer<NetworkEdge>& y) {
+    auto sortByHsEG = [](const QSharedPointer<NetworkEdge>& x, const QSharedPointer<NetworkEdge>& y)
+    {
         return y->hsEG < x->hsEG; // 降序
     };
     std::sort(a.begin(), a.end(), sortByHsEG);
     std::sort(b.begin(), b.end(), sortByHsEG);
 
     // 计算当前 Gc 的基线违约数
-    QMap<quint64, quint32> hm = buildHopMatrix(gc);
-    int currentViolations = countViolations(hm, gHopMap, vc, alphaMin, alphaMax, beta, eAbs);
+    int currentViolations = countViolations(ctx, ctx.gc.m_hopMap, ctx.g.m_hopMap, alphaMin, alphaMax, beta, eAbs);
 
     // 处理 A
-    tryRemoveEdges(gc, a, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
+    tryRemoveEdges(ctx, gc, a, alphaMin, alphaMax, beta, eAbs, currentViolations);
     // 处理 B
-    tryRemoveEdges(gc, b, vc, gHopMap, alphaMin, alphaMax, beta, eAbs, currentViolations);
+    tryRemoveEdges(ctx, gc, b, alphaMin, alphaMax, beta, eAbs, currentViolations);
 
     return gc;
 }
@@ -449,7 +439,7 @@ std::optional<EecnBuild> eecnGraphBuild(
     
     // 步骤 1：读取文件
     QString err;
-    if (!step1LoadEdges(filePath, ctx.eSet, err))
+    if (!step1LoadEdges(filePath, ctx, err))
     {
         qDebug().noquote() << err;
         return std::nullopt;
@@ -468,25 +458,22 @@ std::optional<EecnBuild> eecnGraphBuild(
         ctx.maxw = qMax(ctx.maxw, e->weight);
     }
     
-    // 步骤 2c：构建以延迟为权重的原始图 G，并缓存 Floyd-Warshall 结果
+    // 步骤 2c：构建以延迟为权重的原始图 G，并计算 Floyd-Warshall 结果
     buildGraph(ctx.g, ctx.eSet, [](const QSharedPointer<NetworkEdge>& e) { return e->weight; });
-    QString fwErr;
-    if (!ctx.g.computeFloydWarshall(&fwErr))
+    if (!ctx.g.computeFloydWarshall(err))
     {
-        qDebug() << "构建延迟矩阵失败：" << fwErr;
+        qDebug() << "构建延迟矩阵失败：" << err;
         return std::nullopt;
     }
 
     // 步骤 2c+：为每条边计算最短路径
-    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet) {
+    for (const QSharedPointer<NetworkEdge>& e : ctx.eSet)
+    {
         e->path = ctx.g.path(e->source, e->target);
     }
 
-    // 步骤 2d：计算 G 上所有节点对的最短跳数矩阵
-    ctx.gHopMap = buildHopMatrix(ctx.g);
-
-    // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep（复用缓存的 FloydWarshall 结果）
-    step3ComputeWep(ctx.eSet, ctx.vc, ctx.g, ctx.gHopMap,
+    // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep
+    step3ComputeWep(ctx.eSet, ctx.vc, ctx.g,
                     ctx.mina, ctx.maxw, ctx.eAbs, alphaMin, alphaMax, beta);
     
     // 步骤 4：以 Wep 为权重跑 Floyd，生成 gc 和初始 gcInitial
@@ -497,22 +484,24 @@ std::optional<EecnBuild> eecnGraphBuild(
     });
     
     // 步骤 5：检查初始 Gc 是否满足跳数约束
-    QMap<quint64, quint32> gcHopMap = buildHopMatrix(ctx.gcInitial);
-    ctx.hopViolations = countViolations(gcHopMap, ctx.gHopMap, ctx.vc,
+    ctx.hopViolations = countViolations(ctx, ctx.gc.m_hopMap, ctx.g.m_hopMap,
                                          alphaMin, alphaMax, beta, ctx.eAbs);
-    
+
     // 步骤 6：若满足约束则直接使用初始 Gc；否则进行剪枝
     QVector<QSharedPointer<NetworkEdge>> finalGc;
-    if (ctx.hopViolations == 0) {
+    if (ctx.hopViolations == 0)
+    {
         finalGc = ctx.gcInitial;
-    } else {
-        finalGc = step6Prune(ctx.gcInitial, ctx.eSet, ctx.vc, ctx.gHopMap,
-                             alphaMin, alphaMax, beta, ctx.eAbs);
+    }
+    else
+    {
+        finalGc = step6Prune(ctx, alphaMin, alphaMax, beta, ctx.eAbs);
     }
     
     // 计算结果
     double cost = 0.0;
-    for (const QSharedPointer<NetworkEdge>& e : finalGc) {
+    for (const QSharedPointer<NetworkEdge>& e : finalGc)
+    {
         cost += e->weight;
     }
     

@@ -6,52 +6,10 @@
 #include <QPair>
 #include <QString>
 #include <QTextStream>
-#include <QSharedPointer>
 #include <optional>
 #include <functional>
 #include "graph.h"
 
-
-/// 一条链路的完整信息
-///
-/// 字段对应算法标识：
-/// - `source`       : st_e  — 链路起始节点
-/// - `target`       : en_e  — 链路终止节点
-/// - `bandwidth`    : Be    — 链路带宽（Gbps）
-/// - `bec`          : bec   — Ec 中链路的专用网络带宽（≤ Be）
-/// - `delayMs`      :       — 原始延迟值（ms）
-/// - `weight`       : We    — 链路成本权重（秒）= delayMs / 1000
-/// - `hsEG`         : hs_e_G — 总回避度，对所有 (Ci, Cj) 对的 YG_e_ci_cj 累加和
-/// - `weightedCost` : Wep   — 加权成本 = We × hs_e_G
-struct NetworkEdge {
-    /// st_e：链路起始节点
-    quint32 source;
-    /// en_e：链路终止节点
-    quint32 target;
-    /// Be：链路带宽（单位 Gbps）
-    double bandwidth;
-    /// bec：Ec 中该链路的专用网络带宽（单位 Gbps，必须 ≤ Be）
-    double bec;
-    /// 原始延迟值（单位 ms）
-    double delayMs;
-    /// We：链路成本权重（秒）= delayMs / 1000
-    double weight;
-    /// hs_e_G：链路总回避度
-    double hsEG;
-    /// Wep：链路加权成本 = We × hs_e_G
-    double weightedCost;
-    // 最短路径
-    QVector<quint32> path;
-
-    NetworkEdge() 
-        : source(0), target(0), bandwidth(0.0), bec(0.0), 
-          delayMs(0.0), weight(0.0), hsEG(0.0), weightedCost(0.0) {}
-    
-    /// 从原始边属性创建链路实例
-    NetworkEdge(quint32 src, quint32 tgt, double bw, double delay)
-        : source(src), target(tgt), bandwidth(bw), bec(bw),
-          delayMs(delay), weight(delay / 1000.0), hsEG(0.0), weightedCost(0.0) {}
-};
 
 /// EECN 图构建的结果
 struct EecnGraph {
@@ -101,14 +59,8 @@ struct EecnBuild {
     double mina;
     /// MAXW：E 中最大的链路成本权重 We
     double maxw;
-    /// hG_vi_vj：G 上所有节点对的最短跳数矩阵，键为 Graph::packNodePair(source, target)
-    QMap<quint64, quint32> gHopMap;
     /// 生成的Eecn图
     Graph gc;
-    /// 所有边缘服务器对最短路径上的边，键为 Graph::packNodePair(source, target)
-    QSet<quint64> gcSet;
-    // 节点对快速查找表，键为 Graph::packNodePair(source, target)
-    QMap<quint64, QSharedPointer<NetworkEdge>> edgeMap;
     /// 生成的初始 Gc
     QVector<QSharedPointer<NetworkEdge>> gcInitial;
     /// 初始 Gc 中不满足跳数约束的服务器对数量
