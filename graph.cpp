@@ -145,7 +145,7 @@ void Graph::clear()
 // 添加一条NetworkEdge
 void Graph::addNetworkEdge(const QSharedPointer<NetworkEdge>& edge)
 {
-    if (!edge)
+    if (nullptr != edge)
     {
         m_edgeMap.insert(packNodePair(edge->source, edge->target), edge);
         m_edgeMap.insert(packNodePair(edge->target, edge->source), edge);
@@ -315,9 +315,17 @@ bool Graph::computeFloydWarshall(QString& errorMsg)
             while (cur != j)
             {
                 cur = m_nextNode[static_cast<size_t>(cur) * n + j];
-                if (cur < 0) { p.clear(); break; }
+                if (cur < 0)
+                {
+                    p.clear();
+                    break;
+                }
                 p.append(nl[cur]);
-                if (p.size() > n + 1) { p.clear(); break; }
+                if (p.size() > n + 1)
+                {
+                    p.clear();
+                    break;
+                }
             }
             if (!p.isEmpty())
             {
@@ -415,9 +423,4 @@ QVector<std::tuple<quint32, quint32, double>> Graph::allDistances() const
 QVector<quint32> Graph::nodeList() const
 {
     return m_nodes;
-}
-
-const QHash<quint64, QVector<quint32>> &Graph::allPaths() const
-{
-    return m_floydPaths;
 }

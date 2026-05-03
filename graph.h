@@ -51,6 +51,9 @@ struct NetworkEdge {
         delayMs(delay), weight(delay / 1000.0), hsEG(0.0), weightedCost(0.0) {}
 };
 
+// 一条路径上最大的点数
+#define MaxPathNode (50)
+
 /// 一个图的完整信息
 class Graph 
 {
@@ -124,10 +127,6 @@ public:
 
     // 返回图中所有节点列表（Floyd-Warshall 计算时的节点顺序）
     QVector<quint32> nodeList() const;
-
-    // 返回所有预计算的最短路径
-    // 返回值：QHash<键, 值>，键为 packNodePair(source, target)，值为 source -> target 的最短路径节点序列
-    const QHash<quint64, QVector<quint32>> &allPaths() const;
 
     // 将 (source, target) 打包为 quint64：低32位 source，高32位 target
     static inline quint64 packNodePair(quint32 source, quint32 target) 
