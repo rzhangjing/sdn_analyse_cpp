@@ -54,6 +54,13 @@ struct NetworkEdge {
 // 一条路径上最大的点数
 #define MaxPathNode (50)
 
+/// 固定长度路径数据，count 为实际节点数，nodes 为固定长度节点数组（最大容量 MaxPathNode）
+struct PathData
+{
+    quint16 count = 0;
+    quint32 nodes[MaxPathNode];
+};
+
 /// 一个图的完整信息
 class Graph 
 {
@@ -156,7 +163,8 @@ public:
     // 所有节点对的最短距离，键为 packNodePair(source, target)
     QHash<quint64, double> m_floydDistances;
     // 所有节点对的最短路径，键为 packNodePair(source, target)
-    QHash<quint64, QVector<quint32>> m_floydPaths;
+    // 值为 PathData：count 为路径节点数，nodes 为固定长度节点数组（最大 MaxPathNode）
+    QHash<quint64, PathData> m_floydPaths;
     /// 有节点对的的最短跳数矩阵，键为 packNodePair(source, target)
     QMap<quint64, quint32> m_hopMap;
 

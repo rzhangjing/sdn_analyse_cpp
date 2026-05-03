@@ -308,28 +308,28 @@ bool Graph::computeFloydWarshall(QString& errorMsg)
 
             quint32 src = nl[i];
             quint32 tgt = nl[j];
-            QVector<quint32> p;
-            p.reserve(n);
+            PathData pd;
+            pd.count = 0;
             int cur = i;
-            p.append(nl[cur]);
+            pd.nodes[pd.count++] = nl[cur];
             while (cur != j)
             {
                 cur = m_nextNode[static_cast<size_t>(cur) * n + j];
                 if (cur < 0)
                 {
-                    p.clear();
+                    pd.count = 0;
                     break;
                 }
-                p.append(nl[cur]);
-                if (p.size() > n + 1)
+                pd.nodes[pd.count++] = nl[cur];
+                if (pd.count > static_cast<quint16>(n + 1))
                 {
-                    p.clear();
+                    pd.count = 0;
                     break;
                 }
             }
-            if (!p.isEmpty())
+            if (pd.count > 0)
             {
-                m_floydPaths.insert(Graph::packNodePair(src, tgt), std::move(p));
+                m_floydPaths.insert(Graph::packNodePair(src, tgt), pd);
             }
         }
     }
@@ -360,7 +360,7 @@ void Graph::buildHopMatrix()
             auto it = m_floydPaths.find(Graph::packNodePair(source, target));
             if (it != m_floydPaths.end())
             {
-                m_hopMap.insert(Graph::packNodePair(source, target), static_cast<quint32>((*it).size() - 1));
+                m_hopMap.insert(Graph::packNodePair(source, target), static_cast<quint32>(it.value().count - 1));
             }
         }
     }
@@ -399,7 +399,13 @@ QVector<quint32> Graph::path(quint32 source, quint32 target) const
     auto it = m_floydPaths.find(Graph::packNodePair(source, target));
     if (it != m_floydPaths.end())
     {
-        return it.value();
+        const PathData& pd = it.value();
+        QVector<quint32> result;
+        result.reserve(pd.count);
+        for (quint16 k = 0; k < pd.count; ++k) {
+            result.append(pd.nodes[k]);
+        }
+        return result;
     }
     return {};
 }
