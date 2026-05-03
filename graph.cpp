@@ -386,28 +386,26 @@ double Graph::distance(quint32 source, quint32 target) const
     return it.value();
 }
 
-QVector<quint32> Graph::path(quint32 source, quint32 target) const
+PathData Graph::path(quint32 source, quint32 target) const
 {
+    PathData pd;
+    pd.count = 0;
     if (!m_floydValid)
     {
-        return {};
+        return pd;
     }
     if (source == target)
     {
-        return {source};
+        pd.count = 1;
+        pd.nodes[0] = source;
+        return pd;
     }
     auto it = m_floydPaths.find(Graph::packNodePair(source, target));
     if (it != m_floydPaths.end())
     {
-        const PathData& pd = it.value();
-        QVector<quint32> result;
-        result.reserve(pd.count);
-        for (quint16 k = 0; k < pd.count; ++k) {
-            result.append(pd.nodes[k]);
-        }
-        return result;
+        return it.value();
     }
-    return {};
+    return pd;
 }
 
 QVector<std::tuple<quint32, quint32, double>> Graph::allDistances() const

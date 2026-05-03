@@ -126,8 +126,8 @@ public:
     // 返回 source -> target 的最短距离，无路径时返回 infinity
     double distance(quint32 source, quint32 target) const;
 
-    // 从缓存中获取 source -> target 的最短路径，不可达时返回空 QVector
-    QVector<quint32> path(quint32 source, quint32 target) const;
+    // 从缓存中获取 source -> target 的最短路径，不可达时返回 count=0 的 PathData
+    PathData path(quint32 source, quint32 target) const;
 
     // 返回所有节点对的 (source, target, distance) 列表
     QVector<std::tuple<quint32, quint32, double>> allDistances() const;

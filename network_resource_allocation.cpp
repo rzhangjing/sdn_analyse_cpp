@@ -159,8 +159,8 @@ static bool isOnShortestPath(const NetworkEdge& e, quint32 ci, quint32 cj,
 static quint32 findMcn(const NetworkEdge& e, quint32 ci, quint32 cj,
                        const Graph& delayGraph)
 {
-    QVector<quint32> path = delayGraph.path(ci, cj);
-    if (path.isEmpty())
+    PathData pd = delayGraph.path(ci, cj);
+    if (pd.count == 0)
     {
         return ci;
     }
@@ -168,8 +168,9 @@ static quint32 findMcn(const NetworkEdge& e, quint32 ci, quint32 cj,
     quint32 bestNode = ci;
     quint32 bestHops = std::numeric_limits<quint32>::max();
 
-    for (quint32 node : path)
+    for (quint16 k = 0; k < pd.count; ++k)
     {
+        quint32 node = pd.nodes[k];
         quint32 h = delayGraph.m_hopMap.value(Graph::packNodePair(node, e.target), std::numeric_limits<quint32>::max());
         if (h < bestHops)
         {
@@ -277,10 +278,10 @@ static void step4BuildInitialGc(EecnBuild& ctx)
         {
             if (ci == cj) continue;
 
-            QVector<quint32> path = ctx.gc.path(ci, cj);
-            for (int i = 0; i < path.size() - 1; ++i)
+            PathData pd = ctx.gc.path(ci, cj);
+            for (quint16 k = 0; k + 1 < pd.count; ++k)
             {
-                gcSet.insert(Graph::packNodePair(path[i], path[i + 1]));
+                gcSet.insert(Graph::packNodePair(pd.nodes[k], pd.nodes[k + 1]));
             }
         }
     }
@@ -469,7 +470,11 @@ std::optional<EecnBuild> eecnGraphBuild(
     // 步骤 2c+：为每条边计算最短路径
     for (const QSharedPointer<NetworkEdge>& e : ctx.eSet)
     {
-        e->path = ctx.g.path(e->source, e->target);
+        PathData pd = ctx.g.path(e->source, e->target);
+        e->path.clear();
+        for (quint16 k = 0; k < pd.count; ++k) {
+            e->path.append(pd.nodes[k]);
+        }
     }
 
     // 步骤 3：计算每条链路的 hs_e_G 和加权成本 Wep
